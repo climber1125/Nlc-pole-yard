@@ -209,10 +209,9 @@
   <div class="sheet" style="padding:0;background:transparent;border:none;">
     <div style="position:relative;height:60vh;border-radius:16px 16px 0 0;overflow:hidden;">
       <div id="tuneMap" style="position:absolute;inset:0;"></div>
-      <div class="center-pin">📍</div>
     </div>
     <div class="sheet" style="border-radius:0;">
-      <p style="margin-top:0;" id="tuneHint">Pan the map so the pin sits exactly on the pole, then confirm.</p>
+      <p style="margin-top:0;" id="tuneHint">Drag the pin with your finger to the exact spot, then confirm.</p>
       <button class="big-btn green" id="confirmPosBtn">Confirm Position</button>
       <button class="big-btn secondary" id="backGpsBtn">Back</button>
       <button class="big-btn secondary" id="cancelTuneBtn">Cancel</button>
@@ -651,22 +650,25 @@ let tuneMode = 'gps'; // 'gps' | 'manual' | 'reposition'
 let repositionId = null;
 
 /* ---------------- fine-tune ---------------- */
-const tuneOverlay = $('tuneOverlay'); let tuneMap = null;
+const tuneOverlay = $('tuneOverlay'); let tuneMap = null, tuneMarker = null;
+const pinIcon = L.divIcon({ className:'', html:'<div style="font-size:34px;transform:translate(-50%,-90%);filter:drop-shadow(0 3px 4px rgba(0,0,0,.6));">📍</div>', iconSize:[0,0] });
 function openTuneOverlay(coords){
-  $('tuneHint').textContent = tuneMode === 'reposition'
-    ? "Drag the map to move this pin to the correct spot, then confirm."
-    : "Pan the map so the pin sits exactly on the pole, then confirm.";
+  $('tuneHint').textContent = "Drag the pin with your finger to the exact spot, then confirm.";
   $('backGpsBtn').classList.toggle('hidden', tuneMode !== 'gps');
   show(tuneOverlay);
   if (!tuneMap) {
     tuneMap = L.map('tuneMap', { zoomControl: false }).setView([coords.lat, coords.lng], 21);
     L.tileLayer(SAT_URL, { maxZoom: 21, attribution: SAT_ATTR }).addTo(tuneMap);
     L.control.zoom({ position: 'bottomright' }).addTo(tuneMap);
-  } else tuneMap.setView([coords.lat, coords.lng], 21);
+    tuneMarker = L.marker([coords.lat, coords.lng], { icon: pinIcon, draggable: true }).addTo(tuneMap);
+  } else {
+    tuneMap.setView([coords.lat, coords.lng], 21);
+    tuneMarker.setLatLng([coords.lat, coords.lng]);
+  }
   setTimeout(() => tuneMap.invalidateSize(), 50);
 }
 $('confirmPosBtn').onclick = async () => {
-  const c = tuneMap.getCenter();
+  const c = tuneMarker.getLatLng();
   pendingCoords = { lat: c.lat, lng: c.lng };
   hide(tuneOverlay);
   if (tuneMode === 'reposition') {
