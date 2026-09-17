@@ -70,7 +70,11 @@ Either way it pre-fills the next number (`NLC-7`), tap what's on it, notes, Save
 
 **Fixing a pin that's in the wrong spot (admin):** open the pole → **📍 Reposition Pin** → drag the satellite map so the pin lands on the correct spot → Confirm. Doesn't touch the pole's number, components, or notes — just moves it.
 
-**Testing (crew or admin):** tap a pole on the map or in the list → ✅ Mark Tested & Email → turns green for everyone, email fires.
+**Testing (crew or admin):** tap a pole on the map or in the list → ✅ Mark Tested & Email → it asks who's testing (remembers the last name typed, so it's a one-tap confirm after the first time) → turns green for everyone, email fires with the tester's name in it.
+
+**Retest due dates:** poles go amber automatically once they were last tested more than `RETEST_DAYS` days ago (set near the top of `index.html`, defaults to 365). Red = never tested, amber = tested but due again, green = tested and current. Filter the Pole List by "Due for Retest" to see what needs attention.
+
+**Printing the inventory:** ☰ → Print Inventory — opens a clean table (pole #, status, components, notes, tested by, tested date, retest-due date, GPS) in a new tab, print-ready. Good for a binder or a compliance file.
 
 **Finding what's left:** ☰ → Pole List → "Not Tested" filter. Header always shows `42 poles · 30 tested · 12 remaining`.
 
