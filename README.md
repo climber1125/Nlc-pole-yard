@@ -74,6 +74,10 @@ Either way it pre-fills the next number (`NLC-7`), tap what's on it, notes, Save
 
 **Retest due dates:** poles go amber automatically once they were last tested more than `RETEST_DAYS` days ago (set near the top of `index.html`, defaults to 365). Red = never tested, amber = tested but due again, green = tested and current. Filter the Pole List by "Due for Retest" to see what needs attention.
 
+**Sharing a link to one pole:** open any pole → 🔗 Share Link to This Pole. On a phone this opens your share sheet (text, email, whatever); on desktop it copies the link. Opening that link takes anyone straight to that pole, zoomed in, details open — no hunting on the map.
+
+**Saved Views (bookmark a spot on the map):** ☰ → Saved Views. Pan/zoom the map to wherever you want (e.g. "North Yard"), name it, ＋ Save Current View. Each saved view has **Go** (jump there), **🔗** (share as a link — opens the app zoomed to that exact spot), and 🗑 (delete). Saved views live on your phone only, not shared with the team — the link is what makes a view shareable.
+
 **Printing the inventory:** ☰ → Print Inventory — opens a clean table (pole #, status, components, notes, tested by, tested date, retest-due date, GPS) in a new tab, print-ready. Good for a binder or a compliance file.
 
 **Finding what's left:** ☰ → Pole List → "Not Tested" filter. Header always shows `42 poles · 30 tested · 12 remaining`.
