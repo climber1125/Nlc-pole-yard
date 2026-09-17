@@ -620,14 +620,18 @@ function openGroupMove(){
   if (!chosen.length) return;
   const centLat = chosen.reduce((s,p) => s + p.lat, 0) / chosen.length;
   const centLng = chosen.reduce((s,p) => s + p.lng, 0) / chosen.length;
+  const bounds = L.latLngBounds(chosen.map(p => [p.lat, p.lng]));
   show($('groupMoveOverlay'));
   if (!groupMoveMap) {
     groupMoveMap = L.map('groupMoveMap', { zoomControl: false }).setView([centLat, centLng], 19);
     L.tileLayer(SAT_URL, { maxZoom: 21, maxNativeZoom: 19, attribution: SAT_ATTR }).addTo(groupMoveMap);
     L.control.zoom({ position: 'bottomright' }).addTo(groupMoveMap);
-  } else {
-    groupMoveMap.setView([centLat, centLng], 19);
   }
+  setTimeout(() => {
+    groupMoveMap.invalidateSize();
+    if (chosen.length > 1) groupMoveMap.fitBounds(bounds.pad(0.5), { maxZoom: 20 });
+    else groupMoveMap.setView([centLat, centLng], 20);
+  }, 50);
   if (groupHandle) { groupMoveMap.removeLayer(groupHandle); groupHandle = null; }
   groupGhosts.forEach(g => groupMoveMap.removeLayer(g.marker));
   groupGhosts = chosen.map(p => ({
@@ -642,7 +646,6 @@ function openGroupMove(){
     const dLat = c.lat - groupStart.lat, dLng = c.lng - groupStart.lng;
     groupGhosts.forEach(g => g.marker.setLatLng([g.origLat + dLat, g.origLng + dLng]));
   });
-  setTimeout(() => groupMoveMap.invalidateSize(), 50);
 }
 $('cancelGroupMoveBtn').onclick = () => { hide($('groupMoveOverlay')); exitSelectMode(); };
 $('confirmGroupMoveBtn').onclick = async () => {
