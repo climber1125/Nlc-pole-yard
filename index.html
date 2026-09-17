@@ -410,7 +410,7 @@ window.addEventListener('online', () => refresh(true));
 const SAT_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const SAT_ATTR = 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics';
 const map = L.map('map', { zoomControl: false }).setView([35.4676, -97.5164], 17);
-L.tileLayer(SAT_URL, { maxZoom: 21, attribution: SAT_ATTR }).addTo(map);
+L.tileLayer(SAT_URL, { maxZoom: 21, maxNativeZoom: 19, attribution: SAT_ATTR }).addTo(map);
 L.control.zoom({ position: 'topright' }).addTo(map);
 const markerLayer = L.layerGroup().addTo(map);
 const markerById = {};
@@ -657,12 +657,12 @@ function openTuneOverlay(coords){
   $('backGpsBtn').classList.toggle('hidden', tuneMode !== 'gps');
   show(tuneOverlay);
   if (!tuneMap) {
-    tuneMap = L.map('tuneMap', { zoomControl: false }).setView([coords.lat, coords.lng], 21);
-    L.tileLayer(SAT_URL, { maxZoom: 21, attribution: SAT_ATTR }).addTo(tuneMap);
+    tuneMap = L.map('tuneMap', { zoomControl: false }).setView([coords.lat, coords.lng], 20);
+    L.tileLayer(SAT_URL, { maxZoom: 21, maxNativeZoom: 19, attribution: SAT_ATTR }).addTo(tuneMap);
     L.control.zoom({ position: 'bottomright' }).addTo(tuneMap);
     tuneMarker = L.marker([coords.lat, coords.lng], { icon: pinIcon, draggable: true }).addTo(tuneMap);
   } else {
-    tuneMap.setView([coords.lat, coords.lng], 21);
+    tuneMap.setView([coords.lat, coords.lng], 20);
     tuneMarker.setLatLng([coords.lat, coords.lng]);
   }
   setTimeout(() => tuneMap.invalidateSize(), 50);
