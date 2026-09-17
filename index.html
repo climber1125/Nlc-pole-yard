@@ -138,6 +138,15 @@
   </div>
 </div>
 
+<div class="overlay hidden" id="selectBanner" style="align-items:flex-start;pointer-events:none;">
+  <div class="sheet" style="border-radius:0 0 16px 16px;margin-top:56px;pointer-events:auto;">
+    <p style="margin:0 0 10px;"><b id="selectCountText">0 poles selected.</b> Tap poles on the map to select them.</p>
+    <button class="big-btn green" id="selectMoveBtn">🧲 Move Selected Together</button>
+    <button class="big-btn secondary" id="selectClearBtn">Clear Selection</button>
+    <button class="big-btn secondary" id="selectCancelBtn">Cancel</button>
+  </div>
+</div>
+
 <div class="legend">
   <span><span class="dot" style="background:#2fbf71"></span>Tested</span> &nbsp;
   <span><span class="dot" style="background:#ffb020"></span>Due for retest</span> &nbsp;
@@ -152,6 +161,7 @@
     <div class="grab"></div>
     <div class="menu-item" id="mAccess"><span class="ic">🔑</span><div>Access<span class="sub" id="mAccessSub">Enter a crew or admin code</span></div></div>
     <div class="menu-item" id="mList"><span class="ic">📋</span><div>Pole List<span class="sub" id="mListSub">View, search, jump to any pole</span></div></div>
+    <div class="menu-item admin-only" id="mMultiMove"><span class="ic">🧲</span><div>Move Multiple Pins<span class="sub">Select several, drag them together</span></div></div>
     <div class="menu-item" id="mViews"><span class="ic">📌</span><div>Saved Views<span class="sub">Bookmark a spot on the map, share as a link</span></div></div>
     <div class="menu-item" id="mRefresh"><span class="ic">🔄</span><div>Refresh<span class="sub">Pull latest from the shared map</span></div></div>
     <div class="menu-item" id="mPrint"><span class="ic">🖨</span><div>Print Inventory<span class="sub">Clean table — pole #, status, tested by, dates</span></div></div>
@@ -253,6 +263,20 @@
       <button class="big-btn green" id="confirmPosBtn">Confirm Position</button>
       <button class="big-btn secondary" id="backGpsBtn">Back</button>
       <button class="big-btn secondary" id="cancelTuneBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- GROUP MOVE -->
+<div class="overlay hidden" id="groupMoveOverlay">
+  <div class="sheet" style="padding:0;background:transparent;border:none;">
+    <div style="position:relative;height:60vh;border-radius:16px 16px 0 0;overflow:hidden;">
+      <div id="groupMoveMap" style="position:absolute;inset:0;"></div>
+    </div>
+    <div class="sheet" style="border-radius:0;">
+      <p style="margin-top:0;" id="groupMoveHint">Drag the 🧲 handle — every selected pole (dots) moves with it. Confirm when the group lines up.</p>
+      <button class="big-btn green" id="confirmGroupMoveBtn">Confirm — Move All</button>
+      <button class="big-btn secondary" id="cancelGroupMoveBtn">Cancel</button>
     </div>
   </div>
 </div>
@@ -476,7 +500,11 @@ function redrawMarkers(){
     if (state === 'due') due++;
     const m = L.circleMarker([p.lat, p.lng], { radius: 9, color:'#fff', weight:2, fillColor: STATE_COLOR[state], fillOpacity: 0.95 });
     m.bindTooltip(String(p.poleId), { permanent: true, direction: 'top', offset: [0,-8], className: 'pole-label' });
-    m.on('click', () => { if (measureActive) addMeasurePoint([p.lat, p.lng]); else openView(p.id); });
+    m.on('click', () => {
+      if (selectMode) { toggleSelect(p.id); return; }
+      if (measureActive) { addMeasurePoint([p.lat, p.lng]); return; }
+      openView(p.id);
+    });
     m.addTo(markerLayer);
     markerById[p.id] = m;
   });
@@ -546,6 +574,88 @@ async function quickDropPole(lat, lng){
   batchCount++;
   $('batchCountText').textContent = `${batchCount} dropped.`;
 }
+
+/* ---------------- move multiple pins together ---------------- */
+let selectMode = false;
+const selectedIds = new Set();
+const selectionLayer = L.layerGroup().addTo(map);
+
+$('mMultiMove').onclick = () => {
+  hide($('menuOverlay'));
+  measureActive = false; $('measureBanner').classList.add('hidden');
+  batchMode = false; hide($('batchBanner'));
+  selectMode = true; selectedIds.clear(); selectionLayer.clearLayers();
+  updateSelectBanner();
+  show($('selectBanner'));
+  showToast("Tap poles to select them");
+};
+function toggleSelect(id){
+  if (selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id);
+  redrawSelectionRings();
+  updateSelectBanner();
+}
+function redrawSelectionRings(){
+  selectionLayer.clearLayers();
+  selectedIds.forEach(id => {
+    const p = poles.find(x => x.id === id); if (!p) return;
+    L.circleMarker([p.lat, p.lng], { radius: 14, color:'#ffe066', weight:3, fill:false }).addTo(selectionLayer);
+  });
+}
+function updateSelectBanner(){ $('selectCountText').textContent = `${selectedIds.size} pole(s) selected.`; }
+function exitSelectMode(){
+  selectMode = false; selectedIds.clear(); selectionLayer.clearLayers(); hide($('selectBanner'));
+}
+$('selectCancelBtn').onclick = exitSelectMode;
+$('selectClearBtn').onclick = () => { selectedIds.clear(); redrawSelectionRings(); updateSelectBanner(); };
+
+let groupMoveMap = null, groupHandle = null, groupGhosts = [], groupStart = null, groupIds = [];
+$('selectMoveBtn').onclick = () => {
+  if (!selectedIds.size) { showToast("Select at least one pole first", true); return; }
+  groupIds = [...selectedIds];
+  hide($('selectBanner'));
+  openGroupMove();
+};
+function openGroupMove(){
+  const chosen = groupIds.map(id => poles.find(x => x.id === id)).filter(Boolean);
+  if (!chosen.length) return;
+  const centLat = chosen.reduce((s,p) => s + p.lat, 0) / chosen.length;
+  const centLng = chosen.reduce((s,p) => s + p.lng, 0) / chosen.length;
+  show($('groupMoveOverlay'));
+  if (!groupMoveMap) {
+    groupMoveMap = L.map('groupMoveMap', { zoomControl: false }).setView([centLat, centLng], 19);
+    L.tileLayer(SAT_URL, { maxZoom: 21, maxNativeZoom: 19, attribution: SAT_ATTR }).addTo(groupMoveMap);
+    L.control.zoom({ position: 'bottomright' }).addTo(groupMoveMap);
+  } else {
+    groupMoveMap.setView([centLat, centLng], 19);
+  }
+  if (groupHandle) { groupMoveMap.removeLayer(groupHandle); groupHandle = null; }
+  groupGhosts.forEach(g => groupMoveMap.removeLayer(g.marker));
+  groupGhosts = chosen.map(p => ({
+    id: p.id, origLat: p.lat, origLng: p.lng,
+    marker: L.circleMarker([p.lat, p.lng], { radius: 8, color:'#fff', weight:2, fillColor:'#3ba7ff', fillOpacity:.95 }).addTo(groupMoveMap)
+  }));
+  const handleIcon = L.divIcon({ className:'', html:'<div style="font-size:30px;line-height:30px;filter:drop-shadow(0 3px 4px rgba(0,0,0,.7));">🧲</div>', iconSize:[30,30], iconAnchor:[15,15] });
+  groupStart = { lat: centLat, lng: centLng };
+  groupHandle = L.marker([centLat, centLng], { icon: handleIcon, draggable: true }).addTo(groupMoveMap);
+  groupHandle.on('drag', () => {
+    const c = groupHandle.getLatLng();
+    const dLat = c.lat - groupStart.lat, dLng = c.lng - groupStart.lng;
+    groupGhosts.forEach(g => g.marker.setLatLng([g.origLat + dLat, g.origLng + dLng]));
+  });
+  setTimeout(() => groupMoveMap.invalidateSize(), 50);
+}
+$('cancelGroupMoveBtn').onclick = () => { hide($('groupMoveOverlay')); exitSelectMode(); };
+$('confirmGroupMoveBtn').onclick = async () => {
+  const c = groupHandle.getLatLng();
+  const dLat = c.lat - groupStart.lat, dLng = c.lng - groupStart.lng;
+  hide($('groupMoveOverlay'));
+  for (const g of groupGhosts) {
+    const p = poles.find(x => x.id === g.id); if (!p) continue;
+    await persist({ ...p, lat: g.origLat + dLat, lng: g.origLng + dLng });
+  }
+  showToast(`Moved ${groupGhosts.length} pole(s)`);
+  exitSelectMode();
+};
 
 function clearMeasure(){ measurePts = []; measureLayer.clearLayers(); $('measureResult').textContent = ""; }
 function addMeasurePoint(ll){
