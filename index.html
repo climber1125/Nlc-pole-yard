@@ -100,8 +100,7 @@
     color:#04220f;padding:12px 20px;border-radius:10px;font-weight:700;font-size:14px;z-index:100;
     box-shadow:0 4px 20px rgba(0,0,0,.4);max-width:90vw;text-align:center;}
   .toast.error{background:var(--red);color:#2b0000;}
-  .center-pin{position:absolute;top:50%;left:50%;transform:translate(-50%,-100%);z-index:40;
-    font-size:34px;pointer-events:none;filter:drop-shadow(0 3px 4px rgba(0,0,0,.6));}
+  .drop-pin-icon{background:transparent !important;border:none !important;}
   .pole-label{background:rgba(15,23,32,.85);color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;padding:2px 5px;box-shadow:none;}
   .pole-label::before{display:none;}
   .me-dot{width:16px;height:16px;border-radius:50%;background:#3ba7ff;border:3px solid #fff;box-shadow:0 0 0 2px rgba(59,167,255,.5);}
@@ -813,7 +812,12 @@ let repositionId = null;
 
 /* ---------------- fine-tune ---------------- */
 const tuneOverlay = $('tuneOverlay'); let tuneMap = null, tuneMarker = null;
-const pinIcon = L.divIcon({ className:'', html:'<div style="font-size:34px;transform:translate(-50%,-90%);filter:drop-shadow(0 3px 4px rgba(0,0,0,.6));">📍</div>', iconSize:[0,0] });
+const pinIcon = L.divIcon({
+  className: 'drop-pin-icon',
+  html: '<div style="font-size:34px;line-height:34px;text-align:center;filter:drop-shadow(0 3px 4px rgba(0,0,0,.7));">📍</div>',
+  iconSize: [34, 34],
+  iconAnchor: [17, 32] // tip of the pin points at the exact coordinate
+});
 function openTuneOverlay(coords){
   $('tuneHint').textContent = "Drag the pin with your finger to the exact spot, then confirm.";
   $('backGpsBtn').classList.toggle('hidden', tuneMode !== 'gps');
