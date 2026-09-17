@@ -288,8 +288,10 @@
   <div class="sheet">
     <div class="grab"></div>
     <h2 id="formTitle">Label This Pole</h2>
+    <label>Area</label>
+    <div class="chips" id="areaRow"></div>
     <label>Pole # / ID</label>
-    <input type="text" id="poleId" placeholder="e.g. NLC-1">
+    <input type="text" id="poleId" placeholder="Pick an area above, or type your own">
     <label>What's on it</label>
     <div class="chips" id="chipRow">
       <div class="chip" data-v="Transformer">Transformer</div>
@@ -342,13 +344,23 @@
    CONFIG
    NOTIFY_EMAIL is required. EmailJS keys are OPTIONAL:
    blank = mail app opens pre-filled; filled = sends silently. See README.
-   POLE_PREFIX controls the auto-suggested ID: NLC-1, NLC-2, ...
+   AREAS defines the sections of your pole yard. Each gets a short code;
+   numbering restarts at 1 within each area (CA1, CA2... then DA1, DA2...)
+   instead of one long running count. Add, remove, or rename freely —
+   the code is what gets used in the pole ID, the label is what shows
+   as a button in the app.
    ========================================================= */
 const NOTIFY_EMAIL = "ditchdigger1125@gmail.com";
 const EMAILJS_PUBLIC_KEY = "";
 const EMAILJS_SERVICE_ID = "";
 const EMAILJS_TEMPLATE_ID = "";
-const POLE_PREFIX = "NLC-";
+const AREAS = [
+  { code: "CA", label: "Climbing Area" },
+  { code: "DA", label: "Distribution Area" },
+  { code: "TA", label: "Transmission Area" },
+  { code: "UG", label: "Underground" },
+  { code: "RA", label: "Rigging Area" },
+];
 const RETEST_DAYS = 365; // poles tested longer ago than this show amber "due for retest"
 const API = "/api/poles";
 /* ========================================================= */
@@ -789,11 +801,28 @@ refresh(true).then(tryOpenLinkedPole); // in case the pole wasn't in local cache
 if (!poles.length && !linkedPoleId && isNaN(linkedLat)) navigator.geolocation && navigator.geolocation.getCurrentPosition(
   pos => { if (!firstFit) map.setView([pos.coords.latitude, pos.coords.longitude], 18); }, () => {}, { enableHighAccuracy:false, timeout:5000 });
 
-/* ---------------- next ID suggestion ---------------- */
-function nextPoleId(){
+/* ---------------- next ID suggestion (per area) ---------------- */
+function nextIdForArea(code){
   let max = 0;
-  poles.forEach(p => { const m = String(p.poleId).match(/(\d+)\s*$/); if (m) max = Math.max(max, parseInt(m[1],10)); });
-  return POLE_PREFIX + (max + 1);
+  const re = new RegExp('^' + code + '(\\d+)$', 'i');
+  poles.forEach(p => { const m = String(p.poleId).match(re); if (m) max = Math.max(max, parseInt(m[1],10)); });
+  return code + (max + 1);
+}
+function nextPoleId(){ return nextIdForArea(AREAS[0] ? AREAS[0].code : "NLC-"); }
+
+function renderAreaChips(selectedCode){
+  const row = $('areaRow'); row.innerHTML = "";
+  AREAS.forEach(a => {
+    const c = document.createElement('div');
+    c.className = 'chip' + (a.code === selectedCode ? ' selected' : '');
+    c.textContent = a.label;
+    c.onclick = () => {
+      row.querySelectorAll('.chip').forEach(x => x.classList.remove('selected'));
+      c.classList.add('selected');
+      poleIdInput.value = nextIdForArea(a.code);
+    };
+    row.appendChild(c);
+  });
 }
 
 /* ---------------- live location ---------------- */
@@ -1052,7 +1081,9 @@ chipRow.addEventListener('click', e => { const c = e.target.closest('.chip'); if
 function openForm(existing){
   editingId = existing ? existing.id : null;
   $('formTitle').textContent = existing ? "Edit " + existing.poleId : "Label This Pole";
-  poleIdInput.value = existing ? existing.poleId : nextPoleId();
+  const firstArea = AREAS[0] ? AREAS[0].code : null;
+  poleIdInput.value = existing ? existing.poleId : (firstArea ? nextIdForArea(firstArea) : "");
+  renderAreaChips(existing ? null : firstArea);
   notesInput.value = existing ? (existing.notes || "") : "";
   testedNow.checked = false;
   $('testedNowRow').classList.toggle('hidden', !!existing);
