@@ -142,6 +142,7 @@
   <div class="sheet" style="border-radius:0 0 16px 16px;margin-top:56px;pointer-events:auto;">
     <p style="margin:0 0 10px;"><b id="selectCountText">0 poles selected.</b> Tap poles on the map to select them.</p>
     <button class="big-btn green" id="selectMoveBtn">🧲 Move Selected Together</button>
+    <button class="big-btn green hidden" id="selectMarkTestedBtn">✅ Mark Selected Tested</button>
     <button class="big-btn secondary" id="selectClearBtn">Clear Selection</button>
     <button class="big-btn secondary" id="selectCancelBtn">Cancel</button>
   </div>
@@ -162,6 +163,7 @@
     <div class="menu-item" id="mAccess"><span class="ic">🔑</span><div>Access<span class="sub" id="mAccessSub">Enter a crew or admin code</span></div></div>
     <div class="menu-item" id="mList"><span class="ic">📋</span><div>Pole List<span class="sub" id="mListSub">View, search, jump to any pole</span></div></div>
     <div class="menu-item admin-only" id="mMultiMove"><span class="ic">🧲</span><div>Move Multiple Pins<span class="sub">Select several, drag them together</span></div></div>
+    <div class="menu-item test-only" id="mMultiTest"><span class="ic">☑</span><div>Mark Multiple Tested<span class="sub">Select several poles, one tester name, one email</span></div></div>
     <div class="menu-item" id="mViews"><span class="ic">📌</span><div>Saved Views<span class="sub">Bookmark a spot on the map, share as a link</span></div></div>
     <div class="menu-item" id="mRefresh"><span class="ic">🔄</span><div>Refresh<span class="sub">Pull latest from the shared map</span></div></div>
     <div class="menu-item" id="mPrint"><span class="ic">🖨</span><div>Print Inventory<span class="sub">Clean table — pole #, status, tested by, dates</span></div></div>
@@ -580,15 +582,52 @@ let selectMode = false;
 const selectedIds = new Set();
 const selectionLayer = L.layerGroup().addTo(map);
 
-$('mMultiMove').onclick = () => {
+let selectPurpose = 'move'; // 'move' | 'test'
+function enterSelectMode(purpose){
   hide($('menuOverlay'));
   measureActive = false; $('measureBanner').classList.add('hidden');
   batchMode = false; hide($('batchBanner'));
-  selectMode = true; selectedIds.clear(); selectionLayer.clearLayers();
+  selectMode = true; selectPurpose = purpose; selectedIds.clear(); selectionLayer.clearLayers();
+  $('selectMoveBtn').classList.toggle('hidden', purpose !== 'move');
+  $('selectMarkTestedBtn').classList.toggle('hidden', purpose !== 'test');
   updateSelectBanner();
   show($('selectBanner'));
   showToast("Tap poles to select them");
+}
+$('mMultiMove').onclick = () => enterSelectMode('move');
+$('mMultiTest').onclick = () => enterSelectMode('test');
+$('selectMarkTestedBtn').onclick = () => {
+  if (!selectedIds.size) { showToast("Select at least one pole first", true); return; }
+  const ids = [...selectedIds];
+  hide($('selectBanner'));
+  promptTesterName(async (name) => {
+    const updated = [];
+    for (const id of ids) { const u = await setTested(id, true, name); if (u) updated.push(u); }
+    if (updated.length) await sendBulkTestEmail(updated, name);
+    showToast(`Marked ${updated.length} pole(s) tested`);
+    exitSelectMode();
+  });
 };
+async function sendBulkTestEmail(list, testerName){
+  const when = new Date().toLocaleString();
+  const lines = list.map(p => {
+    const comps = (p.components||[]).length ? p.components.join(", ") : "none listed";
+    return `${p.poleId} — ${comps}${p.notes ? " — " + p.notes : ""} — https://maps.google.com/?q=${p.lat},${p.lng}`;
+  }).join("\n");
+  const subject = `${list.length} poles TESTED — ${when}`;
+  const body = `Tested by: ${testerName}\nTime: ${when}\n\n${lines}`;
+  if (EMAILJS_ON) {
+    try {
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        to_email: NOTIFY_EMAIL, subject, pole_id: `${list.length} poles`, tested_by: testerName, tested_at: when,
+        components: `${list.length} poles tested`, notes: body, lat: "", lng: "", map_link: "https://maps.google.com/", message: body
+      });
+      showToast("Bulk email sent");
+    } catch (e) { showToast("Marked tested, but bulk email failed: " + (e.text || e.message), true); }
+  } else {
+    window.location.href = `mailto:${NOTIFY_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }
+}
 function toggleSelect(id){
   if (selectedIds.has(id)) selectedIds.delete(id); else selectedIds.add(id);
   redrawSelectionRings();
