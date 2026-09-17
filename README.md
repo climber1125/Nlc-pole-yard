@@ -62,7 +62,13 @@ Give instructors the crew code. Keep the admin code to yourself or whoever manag
 
 Send everyone the link. "Add to Home Screen" gives it an app icon.
 
-**Mapping a pole (admin):** ＋ Mark Pole Here → GPS locks → pan the satellite view so the pin is on the pole → Confirm → it pre-fills the next number (`NLC-7`) → tap what's on it → notes → Save. Flip "Tested right now" if you're testing as you go.
+**Mapping a pole (admin):** ＋ Add Pole → choose:
+- **I'm At the Pole — Use GPS** — locks GPS, then pan the satellite view so the pin sits exactly on the pole, Confirm.
+- **Not There — Place on Map** — skips GPS entirely, pan/zoom the satellite view to find the pole from imagery and drop the pin there. Use this for poles you're mapping from memory or from the office.
+
+Either way it pre-fills the next number (`NLC-7`), tap what's on it, notes, Save. Flip "Tested right now" if you're testing as you go.
+
+**Fixing a pin that's in the wrong spot (admin):** open the pole → **📍 Reposition Pin** → drag the satellite map so the pin lands on the correct spot → Confirm. Doesn't touch the pole's number, components, or notes — just moves it.
 
 **Testing (crew or admin):** tap a pole on the map or in the list → ✅ Mark Tested & Email → turns green for everyone, email fires.
 
@@ -72,7 +78,9 @@ Send everyone the link. "Add to Home Screen" gives it an app icon.
 
 **New testing round (admin):** ☰ → Reset All Tests. Every pole goes back to red for everyone. Inventory untouched.
 
-**Map buttons:** ⌖ = live blue dot that follows you (drag map to stop following, tap again to turn off). ⛶ = zoom to all poles.
+**Map buttons:** ⌖ = live blue dot that follows you (drag map to stop following, tap again to turn off). ⛶ = zoom to all poles. **📏 = measure distance** — tap it on, then tap two poles or any two spots on the map; shows the distance in feet (or miles if far). Tap 📏 again to turn off.
+
+**Distance to a pole:** with ⌖ (live location) turned on, opening any pole shows how far it is from where you're standing right now — handy for finding the nearest untested pole.
 
 ## Sync status (top-right pill)
 
