@@ -9,7 +9,7 @@
 //
 // GET    /api/poles              -> all poles (anyone)
 // POST   /api/poles/whoami       -> { role }  (checks the x-key header)
-// POST   /api/poles/:id/tested   -> body {tested:true|false}  (crew or admin)
+// POST   /api/poles/:id/tested   -> body {tested:true|false, testedBy?:string}  (crew or admin)
 // PUT    /api/poles/:id          -> create/replace one pole   (admin)
 // DELETE /api/poles/:id          -> remove one pole           (admin)
 // POST   /api/poles/reset        -> all poles tested=false    (admin)
@@ -55,8 +55,9 @@ export default async (req) => {
       if (!canTest) return json({ error: "crew or admin code required" }, 403);
       const existing = await store.get(id, { type: "json" });
       if (!existing) return json({ error: "not found" }, 404);
-      const { tested } = await req.json();
-      const updated = { ...existing, tested: !!tested, testedAt: tested ? new Date().toISOString() : null };
+      const { tested, testedBy } = await req.json();
+      const updated = { ...existing, tested: !!tested, testedAt: tested ? new Date().toISOString() : null,
+        testedBy: tested ? (testedBy || existing.testedBy || "") : null };
       await store.setJSON(id, updated);
       return json(updated);
     }
