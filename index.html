@@ -123,6 +123,11 @@
 <div class="side-btns">
   <button class="side-btn" id="locateBtn" title="My location">⌖</button>
   <button class="side-btn" id="fitBtn" title="Show all poles">⛶</button>
+  <button class="side-btn" id="measureBtn" title="Measure distance">📏</button>
+</div>
+
+<div class="legend hidden" id="measureBanner" style="left:50%;transform:translateX(-50%);bottom:auto;top:60px;">
+  Tap two poles or spots on the map to measure. <span id="measureResult"></span>
 </div>
 
 <div class="legend">
@@ -130,7 +135,7 @@
   <span><span class="dot" style="background:#ff5b5b"></span>Not tested</span>
 </div>
 
-<button class="fab" id="markBtn">＋ Mark Pole Here</button>
+<button class="fab" id="markBtn">＋ Add Pole</button>
 
 <!-- MENU -->
 <div class="overlay hidden" id="menuOverlay">
@@ -177,6 +182,17 @@
   </div>
 </div>
 
+<!-- ADD CHOICE -->
+<div class="overlay hidden" id="addChoiceOverlay">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2>Add a Pole</h2>
+    <button class="big-btn green" id="choiceGpsBtn">📍 I'm At the Pole — Use GPS</button>
+    <button class="big-btn secondary" id="choiceManualBtn">🗺 Not There — Place on Map</button>
+    <button class="big-btn secondary" id="choiceCancelBtn">Cancel</button>
+  </div>
+</div>
+
 <!-- GPS ACQUIRE -->
 <div class="overlay hidden" id="gpsOverlay">
   <div class="sheet">
@@ -196,9 +212,10 @@
       <div class="center-pin">📍</div>
     </div>
     <div class="sheet" style="border-radius:0;">
-      <p style="margin-top:0;">Pan the map so the pin sits exactly on the pole, then confirm.</p>
+      <p style="margin-top:0;" id="tuneHint">Pan the map so the pin sits exactly on the pole, then confirm.</p>
       <button class="big-btn green" id="confirmPosBtn">Confirm Position</button>
       <button class="big-btn secondary" id="backGpsBtn">Back</button>
+      <button class="big-btn secondary" id="cancelTuneBtn">Cancel</button>
     </div>
   </div>
 </div>
@@ -243,9 +260,11 @@
     <p id="viewComponents"></p>
     <p id="viewNotes"></p>
     <p style="font-size:12px;" id="viewMeta"></p>
+    <p style="font-size:13px;color:var(--accent);font-weight:700;" id="viewDistance"></p>
     <button class="big-btn green test-only" id="markTestedBtn">✅ Mark Tested &amp; Email</button>
     <button class="big-btn amber hidden test-only" id="unmarkTestedBtn">Mark Untested</button>
     <button class="big-btn secondary admin-only" id="editBtn">Edit Details</button>
+    <button class="big-btn secondary admin-only" id="repositionBtn">📍 Reposition Pin</button>
     <button class="big-btn secondary" id="gotoBtn">Show on Map</button>
     <button class="big-btn red admin-only" id="deleteBtn">Delete This Pole</button>
     <button class="big-btn secondary" id="closeViewBtn">Close</button>
@@ -406,7 +425,7 @@ function redrawMarkers(){
     const color = p.tested ? '#2fbf71' : '#ff5b5b';
     const m = L.circleMarker([p.lat, p.lng], { radius: 9, color:'#fff', weight:2, fillColor: color, fillOpacity: 0.95 });
     m.bindTooltip(String(p.poleId), { permanent: true, direction: 'top', offset: [0,-8], className: 'pole-label' });
-    m.on('click', () => openView(p.id));
+    m.on('click', () => { if (measureActive) addMeasurePoint([p.lat, p.lng]); else openView(p.id); });
     m.addTo(markerLayer);
     markerById[p.id] = m;
   });
@@ -419,6 +438,40 @@ function fitAll(){
   map.fitBounds(poles.map(p => [p.lat, p.lng]), { padding: [50,50] });
 }
 $('fitBtn').onclick = fitAll;
+
+/* ---------------- distance measure tool ---------------- */
+function distFeet(lat1,lng1,lat2,lng2){
+  const R = 20925646.325; // earth radius, feet
+  const toRad = d => d*Math.PI/180;
+  const dLat = toRad(lat2-lat1), dLng = toRad(lng2-lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLng/2)**2;
+  return R * 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function fmtDist(ft){ return ft >= 1000 ? (ft/5280).toFixed(2) + " mi" : Math.round(ft) + " ft"; }
+
+let measureActive = false, measurePts = [];
+const measureLayer = L.layerGroup().addTo(map);
+const measureBtn = $('measureBtn');
+
+measureBtn.onclick = () => {
+  measureActive = !measureActive;
+  measureBtn.classList.toggle('active', measureActive);
+  $('measureBanner').classList.toggle('hidden', !measureActive);
+  clearMeasure();
+};
+map.on('click', e => { if (measureActive) addMeasurePoint([e.latlng.lat, e.latlng.lng]); });
+
+function clearMeasure(){ measurePts = []; measureLayer.clearLayers(); $('measureResult').textContent = ""; }
+function addMeasurePoint(ll){
+  if (measurePts.length >= 2) clearMeasure();
+  measurePts.push(ll);
+  L.circleMarker(ll, { radius: 7, color:'#fff', weight:2, fillColor:'#ffb020', fillOpacity:1 }).addTo(measureLayer);
+  if (measurePts.length === 2) {
+    L.polyline(measurePts, { color:'#ffb020', weight:3, dashArray:'6,6' }).addTo(measureLayer);
+    const ft = distFeet(measurePts[0][0], measurePts[0][1], measurePts[1][0], measurePts[1][1]);
+    $('measureResult').innerHTML = `<b>${fmtDist(ft)}</b>`;
+  }
+}
 
 redrawMarkers();
 applyRole();
@@ -555,8 +608,19 @@ function renderList(){
 /* ---------------- GPS acquire ---------------- */
 const gpsOverlay = $('gpsOverlay'), accRing = $('accRing'), useNowBtn = $('useNowBtn'), markBtn = $('markBtn');
 let watchId = null, samples = [], hardTimeout = null, pendingCoords = null;
-markBtn.onclick = () => {
+markBtn.onclick = () => show($('addChoiceOverlay'));
+$('choiceCancelBtn').onclick = () => hide($('addChoiceOverlay'));
+$('choiceGpsBtn').onclick = () => { hide($('addChoiceOverlay')); startGpsAcquire(); };
+$('choiceManualBtn').onclick = () => {
+  hide($('addChoiceOverlay'));
+  tuneMode = 'manual'; repositionId = null;
+  const c = map.getCenter();
+  openTuneOverlay({ lat: c.lat, lng: c.lng });
+};
+
+function startGpsAcquire(){
   if (!navigator.geolocation) { showToast("No GPS available on this browser.", true); return; }
+  tuneMode = 'gps';
   samples = []; useNowBtn.disabled = true; accRing.textContent = "…"; show(gpsOverlay);
   watchId = navigator.geolocation.watchPosition(
     pos => {
@@ -583,10 +647,16 @@ function finishAcquire(){
   pendingCoords = { lat: best.lat, lng: best.lng };
   closeGpsOverlay(); openTuneOverlay(pendingCoords);
 }
+let tuneMode = 'gps'; // 'gps' | 'manual' | 'reposition'
+let repositionId = null;
 
 /* ---------------- fine-tune ---------------- */
 const tuneOverlay = $('tuneOverlay'); let tuneMap = null;
 function openTuneOverlay(coords){
+  $('tuneHint').textContent = tuneMode === 'reposition'
+    ? "Drag the map to move this pin to the correct spot, then confirm."
+    : "Pan the map so the pin sits exactly on the pole, then confirm.";
+  $('backGpsBtn').classList.toggle('hidden', tuneMode !== 'gps');
   show(tuneOverlay);
   if (!tuneMap) {
     tuneMap = L.map('tuneMap', { zoomControl: false }).setView([coords.lat, coords.lng], 21);
@@ -595,12 +665,20 @@ function openTuneOverlay(coords){
   } else tuneMap.setView([coords.lat, coords.lng], 21);
   setTimeout(() => tuneMap.invalidateSize(), 50);
 }
-$('confirmPosBtn').onclick = () => {
+$('confirmPosBtn').onclick = async () => {
   const c = tuneMap.getCenter();
   pendingCoords = { lat: c.lat, lng: c.lng };
-  hide(tuneOverlay); openForm(null);
+  hide(tuneOverlay);
+  if (tuneMode === 'reposition') {
+    const p = poles.find(x => x.id === repositionId);
+    repositionId = null;
+    if (p) { await persist({ ...p, lat: pendingCoords.lat, lng: pendingCoords.lng }); showToast(`${p.poleId} moved`); }
+    return;
+  }
+  openForm(null);
 };
-$('backGpsBtn').onclick = () => { hide(tuneOverlay); markBtn.click(); };
+$('backGpsBtn').onclick = () => { hide(tuneOverlay); startGpsAcquire(); };
+$('cancelTuneBtn').onclick = () => { hide(tuneOverlay); repositionId = null; };
 
 /* ---------------- label form (new + edit) ---------------- */
 const formOverlay = $('formOverlay'), chipRow = $('chipRow'), poleIdInput = $('poleId'), notesInput = $('notes'), testedNow = $('testedNow');
@@ -672,6 +750,10 @@ function openView(id){
   $('viewComponents').textContent = (p.components||[]).length ? p.components.join(", ") : "No components listed";
   $('viewNotes').textContent = p.notes || "No notes";
   $('viewMeta').textContent = "Added " + new Date(p.createdAt).toLocaleDateString() + " · " + p.lat.toFixed(6) + ", " + p.lng.toFixed(6);
+  if (meMarker) {
+    const me = meMarker.getLatLng();
+    $('viewDistance').textContent = `📍 ${fmtDist(distFeet(me.lat, me.lng, p.lat, p.lng))} from you`;
+  } else { $('viewDistance').textContent = ""; }
   markTestedBtn.classList.toggle('hidden', !!p.tested);
   unmarkTestedBtn.classList.toggle('hidden', !p.tested);
   show(viewOverlay);
@@ -681,6 +763,12 @@ unmarkTestedBtn.onclick = async () => {
   hide(viewOverlay); await setTested(viewingId, false);
 };
 $('editBtn').onclick = () => { const p = poles.find(x => x.id === viewingId); hide(viewOverlay); if (p) openForm(p); };
+$('repositionBtn').onclick = () => {
+  const p = poles.find(x => x.id === viewingId); if (!p) return;
+  hide(viewOverlay);
+  tuneMode = 'reposition'; repositionId = p.id;
+  openTuneOverlay({ lat: p.lat, lng: p.lng });
+};
 $('gotoBtn').onclick = () => {
   const p = poles.find(x => x.id === viewingId); if (!p) return;
   hide(viewOverlay); followMe = false; map.setView([p.lat, p.lng], 20);
