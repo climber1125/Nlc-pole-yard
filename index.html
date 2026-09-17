@@ -130,6 +130,14 @@
   Tap two poles or spots on the map to measure. <span id="measureResult"></span>
 </div>
 
+<div class="overlay hidden" id="batchBanner" style="align-items:flex-start;pointer-events:none;">
+  <div class="sheet" style="border-radius:0 0 16px 16px;margin-top:56px;pointer-events:auto;">
+    <p style="margin:0 0 10px;"><b id="batchCountText">0 dropped.</b> Tap anywhere on the map to drop a pin — numbered automatically, no form. Fill in details later from the Pole List.</p>
+    <button class="big-btn amber" id="batchDropHereBtn">📍 Drop at My Location</button>
+    <button class="big-btn green" id="batchDoneBtn">✓ Done — Finish Batch</button>
+  </div>
+</div>
+
 <div class="legend">
   <span><span class="dot" style="background:#2fbf71"></span>Tested</span> &nbsp;
   <span><span class="dot" style="background:#ffb020"></span>Due for retest</span> &nbsp;
@@ -218,6 +226,7 @@
     <h2>Add a Pole</h2>
     <button class="big-btn green" id="choiceGpsBtn">📍 I'm At the Pole — Use GPS</button>
     <button class="big-btn secondary" id="choiceManualBtn">🗺 Not There — Place on Map</button>
+    <button class="big-btn amber" id="choiceBatchBtn">⚡ Drop Several Pins Fast</button>
     <button class="big-btn secondary" id="choiceCancelBtn">Cancel</button>
   </div>
 </div>
@@ -501,7 +510,42 @@ measureBtn.onclick = () => {
   $('measureBanner').classList.toggle('hidden', !measureActive);
   clearMeasure();
 };
-map.on('click', e => { if (measureActive) addMeasurePoint([e.latlng.lat, e.latlng.lng]); });
+map.on('click', e => {
+  if (batchMode) { quickDropPole(e.latlng.lat, e.latlng.lng); return; }
+  if (measureActive) addMeasurePoint([e.latlng.lat, e.latlng.lng]);
+});
+
+/* ---------------- batch add: drop several pins fast, fill details later ---------------- */
+let batchMode = false, batchCount = 0;
+$('choiceBatchBtn').onclick = () => {
+  hide($('addChoiceOverlay'));
+  batchMode = true; batchCount = 0;
+  $('batchCountText').textContent = "0 dropped.";
+  show($('batchBanner'));
+  showToast("Batch mode on — tap the map to drop pins");
+};
+$('batchDoneBtn').onclick = () => {
+  batchMode = false;
+  hide($('batchBanner'));
+  showToast(batchCount ? `Added ${batchCount} pole(s) — open Pole List to fill in details` : "Batch mode off");
+};
+$('batchDropHereBtn').onclick = () => {
+  if (meMarker) { const ll = meMarker.getLatLng(); quickDropPole(ll.lat, ll.lng); return; }
+  if (!navigator.geolocation) { showToast("No GPS available on this browser.", true); return; }
+  navigator.geolocation.getCurrentPosition(
+    pos => quickDropPole(pos.coords.latitude, pos.coords.longitude),
+    err => showToast("GPS error: " + err.message, true),
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 3000 }
+  );
+};
+async function quickDropPole(lat, lng){
+  const poleId = nextPoleId();
+  const pole = { id: 'p_' + Date.now() + '_' + Math.floor(Math.random()*1000), poleId, components: [], notes: '',
+    lat, lng, createdAt: new Date().toISOString(), tested: false, testedAt: null, testedBy: null };
+  await persist(pole);
+  batchCount++;
+  $('batchCountText').textContent = `${batchCount} dropped.`;
+}
 
 function clearMeasure(){ measurePts = []; measureLayer.clearLayers(); $('measureResult').textContent = ""; }
 function addMeasurePoint(ll){
