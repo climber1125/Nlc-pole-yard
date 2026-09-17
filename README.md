@@ -68,6 +68,8 @@ Send everyone the link. "Add to Home Screen" gives it an app icon.
 
 Either way it pre-fills the next number (`NLC-7`), tap what's on it, notes, Save. Flip "Tested right now" if you're testing as you go.
 
+**Dropping several poles fast (admin):** ＋ Add Pole → ⚡ Drop Several Pins Fast. Every tap on the map drops a numbered pin instantly — no GPS lock, no form, no confirm. There's also 📍 Drop at My Location for walking the yard quickly (uses your live location if ⌖ is on, otherwise grabs a fast GPS reading). Tap ✓ Done when you're finished. The pins land with no components/notes — open the Pole List afterward and fill each one in at your own pace. Good for a fast first pass through a big yard; use the regular GPS or manual flow when you want the satellite fine-tune on each pole as you go.
+
 **Fixing a pin that's in the wrong spot (admin):** open the pole → **📍 Reposition Pin** → drag the satellite map so the pin lands on the correct spot → Confirm. Doesn't touch the pole's number, components, or notes — just moves it.
 
 **Testing (crew or admin):** tap a pole on the map or in the list → ✅ Mark Tested & Email → it asks who's testing (remembers the last name typed, so it's a one-tap confirm after the first time) → turns green for everyone, email fires with the tester's name in it.
