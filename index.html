@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>NLC Pole Yard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root{
+    --bg:#0f1720; --card:#182432; --card2:#1f2e3f; --border:#2c3d51;
+    --text:#e8eef5; --sub:#8fa3b8; --accent:#3ba7ff; --green:#2fbf71;
+    --red:#ff5b5b; --amber:#ffb020;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    background:var(--bg);color:var(--text);overflow:hidden;}
+  #map{position:absolute;top:0;left:0;right:0;bottom:0;}
+
+  .topbar{position:absolute;top:0;left:0;right:0;z-index:30;padding:10px 12px;
+    background:linear-gradient(rgba(15,23,32,.95),transparent);display:flex;align-items:center;gap:10px;}
+  .menu-btn{background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:10px;
+    width:42px;height:42px;font-size:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .topbar .title{flex:1;}
+  .topbar h1{font-size:15px;margin:0;font-weight:700;text-shadow:0 1px 3px #000;}
+  #count{font-size:11.5px;color:#cfe0f0;text-shadow:0 1px 3px #000;margin-top:1px;}
+  #sync{font-size:10px;padding:3px 8px;border-radius:10px;background:var(--card2);border:1px solid var(--border);color:var(--sub);flex-shrink:0;}
+  #sync.ok{color:var(--green);border-color:var(--green);}
+  #sync.bad{color:var(--red);border-color:var(--red);}
+  .role-pill{font-size:10px;padding:3px 8px;border-radius:10px;background:var(--card2);border:1px solid var(--border);color:var(--sub);flex-shrink:0;text-transform:uppercase;font-weight:700;}
+  .role-pill.crew{color:var(--amber);border-color:var(--amber);}
+  .role-pill.admin{color:var(--green);border-color:var(--green);}
+  .lock-box{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:13px;color:var(--sub);}
+
+  .side-btns{position:absolute;right:12px;bottom:100px;z-index:30;display:flex;flex-direction:column;gap:8px;}
+  .side-btn{width:46px;height:46px;border-radius:12px;background:var(--card);border:1px solid var(--border);
+    color:var(--text);font-size:20px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.4);}
+  .side-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+  .fab{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);z-index:30;
+    padding:16px 26px;border-radius:30px;border:none;background:var(--accent);color:#fff;
+    font-size:16px;font-weight:700;box-shadow:0 4px 18px rgba(0,0,0,.5);white-space:nowrap;}
+  .fab:active{opacity:.85;}
+
+  .legend{position:absolute;bottom:100px;left:12px;z-index:30;background:rgba(24,36,50,.9);
+    border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11px;color:var(--sub);}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;margin-right:4px;}
+
+  .overlay{position:absolute;inset:0;z-index:50;background:rgba(10,15,20,.55);display:flex;align-items:flex-end;}
+  .hidden{display:none !important;}
+  .sheet{background:var(--card);border-top:1px solid var(--border);border-radius:16px 16px 0 0;
+    width:100%;padding:18px 18px 24px;max-height:88vh;overflow-y:auto;}
+  .sheet h2{margin:0 0 10px;font-size:17px;}
+  .sheet p{color:var(--sub);font-size:13px;margin:4px 0 12px;}
+  .grab{width:38px;height:4px;border-radius:2px;background:var(--border);margin:-6px auto 14px;}
+
+  .menu-item{display:flex;align-items:center;gap:14px;padding:15px 6px;border-bottom:1px solid var(--border);font-size:15px;font-weight:600;}
+  .menu-item:last-child{border-bottom:none;}
+  .menu-item .ic{width:30px;text-align:center;font-size:18px;}
+  .menu-item .sub{display:block;font-size:12px;color:var(--sub);font-weight:400;margin-top:2px;}
+  .menu-item.danger{color:var(--red);}
+
+  .list-item{display:flex;align-items:center;gap:12px;padding:13px 6px;border-bottom:1px solid var(--border);}
+  .list-item .st{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
+  .list-item .name{font-weight:700;font-size:15px;}
+  .list-item .meta{font-size:12px;color:var(--sub);}
+  .list-item .arrow{margin-left:auto;color:var(--sub);}
+  .filter-row{display:flex;gap:8px;margin-bottom:8px;}
+  .filter-row button{flex:1;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--sub);font-size:13px;font-weight:600;}
+  .filter-row button.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+  .acc-ring{width:70px;height:70px;border-radius:50%;border:5px solid var(--accent);
+    margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;
+    animation:pulse 1.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.5;}}
+
+  .big-btn{width:100%;padding:16px;font-size:16px;font-weight:700;border:none;border-radius:12px;color:#fff;background:var(--accent);margin-top:10px;}
+  .big-btn.green{background:var(--green);}
+  .big-btn.red{background:var(--red);}
+  .big-btn.amber{background:var(--amber);color:#2a1a00;}
+  .big-btn.secondary{background:var(--card2);color:var(--text);border:1px solid var(--border);}
+  .big-btn:disabled{opacity:.5;}
+
+  label{display:block;font-size:13px;color:var(--sub);margin:14px 0 6px;font-weight:600;}
+  input[type=text], textarea{width:100%;padding:12px;border-radius:8px;border:1px solid var(--border);
+    background:var(--card2);color:var(--text);font-size:15px;font-family:inherit;}
+  textarea{min-height:64px;resize:vertical;}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;}
+  .chip{padding:9px 13px;border-radius:20px;border:1px solid var(--border);background:var(--card2);color:var(--sub);font-size:13px;}
+  .chip.selected{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;background:var(--card2);
+    border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:16px;}
+  .toggle-row span{font-size:14px;font-weight:600;}
+  .toggle-row input{width:22px;height:22px;}
+  .status-pill{display:inline-block;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:700;margin-bottom:8px;}
+  .status-pill.ok{background:rgba(47,191,113,.2);color:var(--green);}
+  .status-pill.no{background:rgba(255,91,91,.2);color:var(--red);}
+
+  .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--green);
+    color:#04220f;padding:12px 20px;border-radius:10px;font-weight:700;font-size:14px;z-index:100;
+    box-shadow:0 4px 20px rgba(0,0,0,.4);max-width:90vw;text-align:center;}
+  .toast.error{background:var(--red);color:#2b0000;}
+  .center-pin{position:absolute;top:50%;left:50%;transform:translate(-50%,-100%);z-index:40;
+    font-size:34px;pointer-events:none;filter:drop-shadow(0 3px 4px rgba(0,0,0,.6));}
+  .pole-label{background:rgba(15,23,32,.85);color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;padding:2px 5px;box-shadow:none;}
+  .pole-label::before{display:none;}
+  .me-dot{width:16px;height:16px;border-radius:50%;background:#3ba7ff;border:3px solid #fff;box-shadow:0 0 0 2px rgba(59,167,255,.5);}
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<div class="topbar">
+  <button class="menu-btn" id="menuBtn">☰</button>
+  <div class="title">
+    <h1>NLC Pole Yard</h1>
+    <div id="count">loading…</div>
+  </div>
+  <div id="role" class="role-pill">viewer</div>
+  <div id="sync">syncing</div>
+</div>
+
+<div class="side-btns">
+  <button class="side-btn" id="locateBtn" title="My location">⌖</button>
+  <button class="side-btn" id="fitBtn" title="Show all poles">⛶</button>
+</div>
+
+<div class="legend">
+  <span><span class="dot" style="background:#2fbf71"></span>Tested</span> &nbsp;
+  <span><span class="dot" style="background:#ff5b5b"></span>Not tested</span>
+</div>
+
+<button class="fab" id="markBtn">＋ Mark Pole Here</button>
+
+<!-- MENU -->
+<div class="overlay hidden" id="menuOverlay">
+  <div class="sheet">
+    <div class="grab"></div>
+    <div class="menu-item" id="mAccess"><span class="ic">🔑</span><div>Access<span class="sub" id="mAccessSub">Enter a crew or admin code</span></div></div>
+    <div class="menu-item" id="mList"><span class="ic">📋</span><div>Pole List<span class="sub" id="mListSub">View, search, jump to any pole</span></div></div>
+    <div class="menu-item" id="mRefresh"><span class="ic">🔄</span><div>Refresh<span class="sub">Pull latest from the shared map</span></div></div>
+    <div class="menu-item" id="mExport"><span class="ic">⬇</span><div>Export Backup<span class="sub">Save all poles to a file</span></div></div>
+    <div class="menu-item admin-only" id="mImport"><span class="ic">⬆</span><div>Import Backup<span class="sub">Load poles from a file into the shared map</span></div></div>
+    <div class="menu-item admin-only" id="mReset"><span class="ic">↺</span><div>Reset All Tests<span class="sub">New testing round — inventory stays</span></div></div>
+    <button class="big-btn secondary" id="menuClose">Close</button>
+    <input type="file" id="importFile" accept="application/json" class="hidden">
+  </div>
+</div>
+
+<!-- ACCESS -->
+<div class="overlay hidden" id="accessOverlay">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2>Access</h2>
+    <div class="lock-box" id="accessInfo"></div>
+    <label>Enter access code</label>
+    <input type="text" id="accessKey" placeholder="crew or admin code" autocapitalize="off" autocorrect="off">
+    <button class="big-btn green" id="accessGo">Unlock</button>
+    <button class="big-btn secondary hidden" id="accessOut">Sign out (back to viewer)</button>
+    <button class="big-btn secondary" id="accessClose">Close</button>
+  </div>
+</div>
+
+<!-- POLE LIST -->
+<div class="overlay hidden" id="listOverlay">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2>Pole List</h2>
+    <div class="filter-row">
+      <button class="on" data-f="all">All</button>
+      <button data-f="untested">Not Tested</button>
+      <button data-f="tested">Tested</button>
+    </div>
+    <input type="text" id="listSearch" placeholder="Search pole # or notes">
+    <div id="listBody" style="margin-top:8px;"></div>
+    <button class="big-btn secondary" id="listClose">Close</button>
+  </div>
+</div>
+
+<!-- GPS ACQUIRE -->
+<div class="overlay hidden" id="gpsOverlay">
+  <div class="sheet">
+    <div class="acc-ring" id="accRing">…</div>
+    <h2 style="text-align:center;">Getting your location</h2>
+    <p style="text-align:center;">Hold still. Locks onto the best reading — usually 5–10 sec outside.</p>
+    <button class="big-btn green" id="useNowBtn" disabled>Use This Reading</button>
+    <button class="big-btn secondary" id="cancelGpsBtn">Cancel</button>
+  </div>
+</div>
+
+<!-- FINE-TUNE -->
+<div class="overlay hidden" id="tuneOverlay">
+  <div class="sheet" style="padding:0;background:transparent;border:none;">
+    <div style="position:relative;height:60vh;border-radius:16px 16px 0 0;overflow:hidden;">
+      <div id="tuneMap" style="position:absolute;inset:0;"></div>
+      <div class="center-pin">📍</div>
+    </div>
+    <div class="sheet" style="border-radius:0;">
+      <p style="margin-top:0;">Pan the map so the pin sits exactly on the pole, then confirm.</p>
+      <button class="big-btn green" id="confirmPosBtn">Confirm Position</button>
+      <button class="big-btn secondary" id="backGpsBtn">Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- LABEL FORM (new + edit) -->
+<div class="overlay hidden" id="formOverlay">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2 id="formTitle">Label This Pole</h2>
+    <label>Pole # / ID</label>
+    <input type="text" id="poleId" placeholder="e.g. NLC-1">
+    <label>What's on it</label>
+    <div class="chips" id="chipRow">
+      <div class="chip" data-v="Transformer">Transformer</div>
+      <div class="chip" data-v="Crossarm">Crossarm</div>
+      <div class="chip" data-v="Guy Wire">Guy Wire</div>
+      <div class="chip" data-v="Anchor">Anchor</div>
+      <div class="chip" data-v="Down Guy">Down Guy</div>
+      <div class="chip" data-v="Streetlight">Streetlight</div>
+      <div class="chip" data-v="Transformer Ground">Transformer Ground</div>
+      <div class="chip" data-v="Riser">Riser</div>
+      <div class="chip" data-v="Switch">Switch</div>
+      <div class="chip" data-v="Fuse Cutout">Fuse Cutout</div>
+    </div>
+    <label>Notes</label>
+    <textarea id="notes" placeholder="Condition, hazards, anything not covered above"></textarea>
+    <div class="toggle-row" id="testedNowRow">
+      <span>Tested right now — send email</span>
+      <input type="checkbox" id="testedNow">
+    </div>
+    <button class="big-btn green" id="saveBtn">Save Pole</button>
+    <button class="big-btn secondary" id="cancelFormBtn">Cancel</button>
+  </div>
+</div>
+
+<!-- VIEW EXISTING POLE -->
+<div class="overlay hidden" id="viewOverlay">
+  <div class="sheet">
+    <div class="grab"></div>
+    <div id="viewStatus"></div>
+    <h2 id="viewTitle">Pole</h2>
+    <p id="viewComponents"></p>
+    <p id="viewNotes"></p>
+    <p style="font-size:12px;" id="viewMeta"></p>
+    <button class="big-btn green test-only" id="markTestedBtn">✅ Mark Tested &amp; Email</button>
+    <button class="big-btn amber hidden test-only" id="unmarkTestedBtn">Mark Untested</button>
+    <button class="big-btn secondary admin-only" id="editBtn">Edit Details</button>
+    <button class="big-btn secondary" id="gotoBtn">Show on Map</button>
+    <button class="big-btn red admin-only" id="deleteBtn">Delete This Pole</button>
+    <button class="big-btn secondary" id="closeViewBtn">Close</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script>
+/* =========================================================
+   CONFIG
+   NOTIFY_EMAIL is required. EmailJS keys are OPTIONAL:
+   blank = mail app opens pre-filled; filled = sends silently. See README.
+   POLE_PREFIX controls the auto-suggested ID: NLC-1, NLC-2, ...
+   ========================================================= */
+const NOTIFY_EMAIL = "your@email.com";
+const EMAILJS_PUBLIC_KEY = "";
+const EMAILJS_SERVICE_ID = "";
+const EMAILJS_TEMPLATE_ID = "";
+const POLE_PREFIX = "NLC-";
+const API = "/api/poles";
+/* ========================================================= */
+
+/* ---------------- access role ---------------- */
+const KEY_KEY = "campusPolesKey";
+let accessKey = localStorage.getItem(KEY_KEY) || "";
+let role = "viewer";
+const hdr = () => accessKey ? { 'x-key': accessKey } : {};
+
+function applyRole(){
+  const badge = $('role'); badge.textContent = role; badge.className = 'role-pill ' + role;
+  const isAdmin = role === 'admin', canTest = isAdmin || role === 'crew';
+  document.querySelectorAll('.admin-only').forEach(el => el.classList.toggle('hidden', !isAdmin));
+  document.querySelectorAll('.test-only').forEach(el => el.classList.toggle('hidden', !canTest));
+  $('markBtn').classList.toggle('hidden', !isAdmin);
+  $('mAccessSub').textContent = role === 'viewer' ? 'View only — enter a code to make changes' : 'Signed in as ' + role;
+}
+async function checkRole(){
+  try {
+    const r = await fetch(`${API}/whoami`, { method:'POST', headers: hdr() });
+    role = r.ok ? (await r.json()).role : 'viewer';
+  } catch (e) { role = accessKey ? role : 'viewer'; } // offline: keep last known
+  applyRole();
+}
+
+const EMAILJS_ON = !!(EMAILJS_PUBLIC_KEY && EMAILJS_SERVICE_ID && EMAILJS_TEMPLATE_ID && window.emailjs);
+if (EMAILJS_ON) emailjs.init({ publicKey: EMAILJS_PUBLIC_KEY });
+
+const $ = id => document.getElementById(id);
+const show = el => el.classList.remove('hidden');
+const hide = el => el.classList.add('hidden');
+
+/* ---------------- shared storage (Netlify Blobs) + local cache ---------------- */
+const CACHE_KEY = "campusPolesCache";
+const PENDING_KEY = "campusPolesPending"; // writes that failed offline, retried later
+let poles = (() => { try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || []; } catch(e){ return []; } })();
+let pending = (() => { try { return JSON.parse(localStorage.getItem(PENDING_KEY)) || []; } catch(e){ return []; } })();
+
+function cache(){ localStorage.setItem(CACHE_KEY, JSON.stringify(poles)); }
+function savePending(){ localStorage.setItem(PENDING_KEY, JSON.stringify(pending)); }
+function setSync(state, text){ const s = $('sync'); s.className = state; s.textContent = text; }
+
+async function apiPut(pole){
+  const r = await fetch(`${API}/${encodeURIComponent(pole.id)}`, { method:'PUT', headers:{'Content-Type':'application/json', ...hdr()}, body: JSON.stringify(pole) });
+  if (r.status === 403) throw new Error("FORBIDDEN");
+  if (!r.ok) throw new Error(await r.text());
+}
+async function apiDelete(id){
+  const r = await fetch(`${API}/${encodeURIComponent(id)}`, { method:'DELETE', headers: hdr() });
+  if (r.status === 403) throw new Error("FORBIDDEN");
+  if (!r.ok) throw new Error(await r.text());
+}
+async function apiTested(id, tested){
+  const r = await fetch(`${API}/${encodeURIComponent(id)}/tested`, { method:'POST', headers:{'Content-Type':'application/json', ...hdr()}, body: JSON.stringify({ tested }) });
+  if (r.status === 403) throw new Error("FORBIDDEN");
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+// Save one pole: update local immediately, push to server, queue on failure.
+async function persist(pole){
+  const i = poles.findIndex(p => p.id === pole.id);
+  if (i >= 0) poles[i] = pole; else poles.push(pole);
+  cache(); redrawMarkers();
+  try { await apiPut(pole); setSync('ok', 'synced'); }
+  catch (e) {
+    if (e.message === "FORBIDDEN") { showToast("Admin code required for that", true); await refresh(true); return; }
+    pending = pending.filter(x => x.id !== pole.id); pending.push({ op:'put', id: pole.id, pole });
+    savePending(); setSync('bad', `${pending.length} unsynced`);
+  }
+}
+async function remove(id){
+  poles = poles.filter(p => p.id !== id);
+  cache(); redrawMarkers();
+  try { await apiDelete(id); setSync('ok', 'synced'); }
+  catch (e) {
+    if (e.message === "FORBIDDEN") { showToast("Admin code required for that", true); await refresh(true); return; }
+    pending = pending.filter(x => x.id !== id); pending.push({ op:'del', id });
+    savePending(); setSync('bad', `${pending.length} unsynced`);
+  }
+}
+async function setTested(id, tested){
+  const i = poles.findIndex(p => p.id === id); if (i < 0) return null;
+  poles[i] = { ...poles[i], tested, testedAt: tested ? new Date().toISOString() : null };
+  cache(); redrawMarkers();
+  try { const u = await apiTested(id, tested); poles[i] = u; cache(); redrawMarkers(); setSync('ok', 'synced'); return u; }
+  catch (e) {
+    if (e.message === "FORBIDDEN") { showToast("Crew or admin code required", true); await refresh(true); return null; }
+    pending = pending.filter(x => !(x.id === id && x.op === 'tested')); pending.push({ op:'tested', id, tested });
+    savePending(); setSync('bad', `${pending.length} unsynced`);
+    return poles[i];
+  }
+}
+async function flushPending(){
+  if (!pending.length) return;
+  const still = [];
+  for (const job of pending) {
+    try {
+      if (job.op === 'put') await apiPut(job.pole);
+      else if (job.op === 'del') await apiDelete(job.id);
+      else if (job.op === 'tested') await apiTested(job.id, job.tested);
+    } catch (e) { if (e.message !== "FORBIDDEN") still.push(job); }
+  }
+  pending = still; savePending();
+}
+async function refresh(silent){
+  setSync('', 'syncing');
+  try {
+    await flushPending();
+    const r = await fetch(API, { cache:'no-store' });
+    if (!r.ok) throw new Error(await r.text());
+    poles = await r.json();
+    cache(); redrawMarkers();
+    setSync(pending.length ? 'bad' : 'ok', pending.length ? `${pending.length} unsynced` : 'synced');
+    if (!silent) showToast("Up to date");
+  } catch (e) {
+    setSync('bad', 'offline');
+    if (!silent) showToast("Can't reach server — showing last known data", true);
+  }
+}
+window.addEventListener('online', () => refresh(true));
+
+/* ---------------- main map ---------------- */
+const SAT_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const SAT_ATTR = 'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics';
+const map = L.map('map', { zoomControl: false }).setView([35.4676, -97.5164], 17);
+L.tileLayer(SAT_URL, { maxZoom: 21, attribution: SAT_ATTR }).addTo(map);
+L.control.zoom({ position: 'topright' }).addTo(map);
+const markerLayer = L.layerGroup().addTo(map);
+const markerById = {};
+let firstFit = false;
+
+function redrawMarkers(){
+  markerLayer.clearLayers();
+  let tested = 0;
+  poles.forEach(p => {
+    if (p.tested) tested++;
+    const color = p.tested ? '#2fbf71' : '#ff5b5b';
+    const m = L.circleMarker([p.lat, p.lng], { radius: 9, color:'#fff', weight:2, fillColor: color, fillOpacity: 0.95 });
+    m.bindTooltip(String(p.poleId), { permanent: true, direction: 'top', offset: [0,-8], className: 'pole-label' });
+    m.on('click', () => openView(p.id));
+    m.addTo(markerLayer);
+    markerById[p.id] = m;
+  });
+  $('count').textContent = `${poles.length} poles · ${tested} tested · ${poles.length - tested} remaining`;
+  $('mListSub').textContent = `${poles.length} poles · ${poles.length - tested} still to test`;
+  if (poles.length && !firstFit) { fitAll(); firstFit = true; }
+}
+function fitAll(){
+  if (!poles.length) { showToast("No poles yet."); return; }
+  map.fitBounds(poles.map(p => [p.lat, p.lng]), { padding: [50,50] });
+}
+$('fitBtn').onclick = fitAll;
+
+redrawMarkers();
+applyRole();
+checkRole();
+refresh(true);
+if (!poles.length) navigator.geolocation && navigator.geolocation.getCurrentPosition(
+  pos => { if (!firstFit) map.setView([pos.coords.latitude, pos.coords.longitude], 18); }, () => {}, { enableHighAccuracy:false, timeout:5000 });
+
+/* ---------------- next ID suggestion ---------------- */
+function nextPoleId(){
+  let max = 0;
+  poles.forEach(p => { const m = String(p.poleId).match(/(\d+)\s*$/); if (m) max = Math.max(max, parseInt(m[1],10)); });
+  return POLE_PREFIX + (max + 1);
+}
+
+/* ---------------- live location ---------------- */
+let meWatch = null, meMarker = null, meCircle = null, followMe = false;
+const locateBtn = $('locateBtn');
+locateBtn.onclick = () => {
+  if (meWatch !== null) { stopLocate(); return; }
+  if (!navigator.geolocation) { showToast("No GPS on this browser.", true); return; }
+  followMe = true; locateBtn.classList.add('active');
+  meWatch = navigator.geolocation.watchPosition(pos => {
+    const ll = [pos.coords.latitude, pos.coords.longitude];
+    if (!meMarker) {
+      meMarker = L.marker(ll, { icon: L.divIcon({ className:'', html:'<div class="me-dot"></div>', iconSize:[16,16], iconAnchor:[8,8] }), interactive:false }).addTo(map);
+      meCircle = L.circle(ll, { radius: pos.coords.accuracy, color:'#3ba7ff', weight:1, fillOpacity:.12, interactive:false }).addTo(map);
+    } else { meMarker.setLatLng(ll); meCircle.setLatLng(ll); meCircle.setRadius(pos.coords.accuracy); }
+    if (followMe) map.setView(ll, Math.max(map.getZoom(), 18));
+  }, err => { showToast("Location error: " + err.message, true); stopLocate(); },
+  { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 });
+};
+map.on('dragstart', () => { followMe = false; });
+function stopLocate(){
+  if (meWatch !== null) navigator.geolocation.clearWatch(meWatch);
+  meWatch = null; followMe = false; locateBtn.classList.remove('active');
+  if (meMarker) { map.removeLayer(meMarker); meMarker = null; }
+  if (meCircle) { map.removeLayer(meCircle); meCircle = null; }
+}
+
+/* ---------------- menu ---------------- */
+$('menuBtn').onclick = () => show($('menuOverlay'));
+$('menuClose').onclick = () => hide($('menuOverlay'));
+$('menuOverlay').addEventListener('click', e => { if (e.target === $('menuOverlay')) hide($('menuOverlay')); });
+$('mList').onclick = () => { hide($('menuOverlay')); openList(); };
+$('mAccess').onclick = () => { hide($('menuOverlay')); openAccess(); };
+function openAccess(){
+  $('accessInfo').textContent = role === 'viewer'
+    ? "You're viewing only. Crew code = mark poles tested. Admin code = full control (add, edit, delete, reset)."
+    : `Signed in as ${role}.`;
+  $('accessKey').value = "";
+  $('accessOut').classList.toggle('hidden', role === 'viewer');
+  show($('accessOverlay'));
+}
+$('accessClose').onclick = () => hide($('accessOverlay'));
+$('accessGo').onclick = async () => {
+  const k = $('accessKey').value.trim(); if (!k) return;
+  accessKey = k; localStorage.setItem(KEY_KEY, k);
+  await checkRole();
+  if (role === 'viewer') { accessKey = ""; localStorage.removeItem(KEY_KEY); showToast("Code not recognized", true); }
+  else { hide($('accessOverlay')); showToast(`Unlocked: ${role}`); }
+};
+$('accessOut').onclick = async () => {
+  accessKey = ""; localStorage.removeItem(KEY_KEY); await checkRole(); hide($('accessOverlay')); showToast("Back to viewer");
+};
+$('mRefresh').onclick = () => { hide($('menuOverlay')); refresh(false); };
+$('mExport').onclick = () => {
+  const blob = new Blob([JSON.stringify(poles, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'nlc-poles-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click(); URL.revokeObjectURL(url); hide($('menuOverlay'));
+};
+$('mImport').onclick = () => $('importFile').click();
+$('importFile').onchange = (e) => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      const incoming = JSON.parse(reader.result);
+      if (!Array.isArray(incoming)) throw new Error("bad file");
+      const ids = new Set(poles.map(p => p.id));
+      let added = 0;
+      for (const p of incoming) if (!ids.has(p.id)) { await persist(p); added++; }
+      showToast(`Imported ${added} new pole(s)`);
+    } catch (err) { showToast("Import failed — not a valid pole file.", true); }
+    hide($('menuOverlay'));
+  };
+  reader.readAsText(file); e.target.value = "";
+};
+$('mReset').onclick = async () => {
+  const n = poles.filter(p => p.tested).length;
+  if (!n) { showToast("Nothing to reset — no poles marked tested."); return; }
+  if (!confirm(`Reset ${n} tested pole(s) back to NOT TESTED for everyone?\n\nInventory stays. Only test status clears.`)) return;
+  hide($('menuOverlay'));
+  try {
+    const r = await fetch(`${API}/reset`, { method:'POST', headers: hdr() });
+    if (r.status === 403) throw new Error("FORBIDDEN");
+    if (!r.ok) throw new Error(await r.text());
+    await refresh(true);
+    showToast("All poles reset to not tested");
+  } catch (e) { showToast(e.message === "FORBIDDEN" ? "Admin code required" : "Reset failed — check connection", true); }
+};
+
+/* ---------------- pole list ---------------- */
+let listFilter = 'all';
+document.querySelectorAll('.filter-row button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('.filter-row button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); listFilter = b.dataset.f; renderList();
+});
+$('listSearch').oninput = renderList;
+$('listClose').onclick = () => hide($('listOverlay'));
+function openList(){ $('listSearch').value = ""; renderList(); show($('listOverlay')); }
+function renderList(){
+  const q = $('listSearch').value.trim().toLowerCase();
+  const body = $('listBody'); body.innerHTML = "";
+  const rows = poles
+    .filter(p => listFilter === 'all' || (listFilter === 'tested') === !!p.tested)
+    .filter(p => !q || String(p.poleId).toLowerCase().includes(q) || (p.notes||'').toLowerCase().includes(q) || (p.components||[]).join(' ').toLowerCase().includes(q))
+    .sort((a,b) => String(a.poleId).localeCompare(String(b.poleId), undefined, { numeric:true }));
+  if (!rows.length) { body.innerHTML = '<p style="text-align:center;">No poles match.</p>'; return; }
+  rows.forEach(p => {
+    const d = document.createElement('div');
+    d.className = 'list-item';
+    d.innerHTML = `<div class="st" style="background:${p.tested ? '#2fbf71' : '#ff5b5b'}"></div>
+      <div><div class="name">${p.poleId}</div>
+      <div class="meta">${(p.components||[]).length ? p.components.join(', ') : 'no components'}${p.tested ? ' · tested ' + new Date(p.testedAt).toLocaleDateString() : ''}</div></div>
+      <div class="arrow">›</div>`;
+    d.onclick = () => { hide($('listOverlay')); openView(p.id); };
+    body.appendChild(d);
+  });
+}
+
+/* ---------------- GPS acquire ---------------- */
+const gpsOverlay = $('gpsOverlay'), accRing = $('accRing'), useNowBtn = $('useNowBtn'), markBtn = $('markBtn');
+let watchId = null, samples = [], hardTimeout = null, pendingCoords = null;
+markBtn.onclick = () => {
+  if (!navigator.geolocation) { showToast("No GPS available on this browser.", true); return; }
+  samples = []; useNowBtn.disabled = true; accRing.textContent = "…"; show(gpsOverlay);
+  watchId = navigator.geolocation.watchPosition(
+    pos => {
+      const s = { lat: pos.coords.latitude, lng: pos.coords.longitude, acc: pos.coords.accuracy };
+      samples.push(s); accRing.textContent = "±" + Math.round(s.acc) + "m"; useNowBtn.disabled = false;
+      if (s.acc <= 6) finishAcquire();
+    },
+    err => { showToast("GPS error: " + err.message, true); closeGpsOverlay(); },
+    { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
+  hardTimeout = setTimeout(() => {
+    if (samples.length) finishAcquire();
+    else { showToast("Couldn't get a GPS lock — try again outside.", true); closeGpsOverlay(); }
+  }, 12000);
+};
+useNowBtn.onclick = () => finishAcquire();
+$('cancelGpsBtn').onclick = closeGpsOverlay;
+function closeGpsOverlay(){
+  if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+  if (hardTimeout) { clearTimeout(hardTimeout); hardTimeout = null; }
+  hide(gpsOverlay);
+}
+function finishAcquire(){
+  const best = samples.reduce((a,b) => (b.acc < a.acc ? b : a), samples[0]);
+  pendingCoords = { lat: best.lat, lng: best.lng };
+  closeGpsOverlay(); openTuneOverlay(pendingCoords);
+}
+
+/* ---------------- fine-tune ---------------- */
+const tuneOverlay = $('tuneOverlay'); let tuneMap = null;
+function openTuneOverlay(coords){
+  show(tuneOverlay);
+  if (!tuneMap) {
+    tuneMap = L.map('tuneMap', { zoomControl: false }).setView([coords.lat, coords.lng], 21);
+    L.tileLayer(SAT_URL, { maxZoom: 21, attribution: SAT_ATTR }).addTo(tuneMap);
+    L.control.zoom({ position: 'bottomright' }).addTo(tuneMap);
+  } else tuneMap.setView([coords.lat, coords.lng], 21);
+  setTimeout(() => tuneMap.invalidateSize(), 50);
+}
+$('confirmPosBtn').onclick = () => {
+  const c = tuneMap.getCenter();
+  pendingCoords = { lat: c.lat, lng: c.lng };
+  hide(tuneOverlay); openForm(null);
+};
+$('backGpsBtn').onclick = () => { hide(tuneOverlay); markBtn.click(); };
+
+/* ---------------- label form (new + edit) ---------------- */
+const formOverlay = $('formOverlay'), chipRow = $('chipRow'), poleIdInput = $('poleId'), notesInput = $('notes'), testedNow = $('testedNow');
+let editingId = null;
+chipRow.addEventListener('click', e => { const c = e.target.closest('.chip'); if (c) c.classList.toggle('selected'); });
+
+function openForm(existing){
+  editingId = existing ? existing.id : null;
+  $('formTitle').textContent = existing ? "Edit " + existing.poleId : "Label This Pole";
+  poleIdInput.value = existing ? existing.poleId : nextPoleId();
+  notesInput.value = existing ? (existing.notes || "") : "";
+  testedNow.checked = false;
+  $('testedNowRow').classList.toggle('hidden', !!existing);
+  chipRow.querySelectorAll('.chip').forEach(c => c.classList.toggle('selected', !!existing && (existing.components||[]).includes(c.dataset.v)));
+  show(formOverlay);
+}
+$('cancelFormBtn').onclick = () => hide(formOverlay);
+$('saveBtn').onclick = async () => {
+  const components = [...chipRow.querySelectorAll('.chip.selected')].map(c => c.dataset.v);
+  const poleId = poleIdInput.value.trim() || nextPoleId();
+  const notes = notesInput.value.trim();
+  hide(formOverlay);
+  if (editingId) {
+    const p = poles.find(x => x.id === editingId); if (!p) return;
+    await persist({ ...p, poleId, components, notes, updatedAt: new Date().toISOString() });
+    showToast(`${poleId} updated`);
+    return;
+  }
+  const pole = { id: 'p_' + Date.now(), poleId, components, notes, lat: pendingCoords.lat, lng: pendingCoords.lng,
+    createdAt: new Date().toISOString(), tested: false, testedAt: null };
+  if (testedNow.checked) { pole.tested = true; pole.testedAt = new Date().toISOString(); }
+  await persist(pole);
+  if (pole.tested) await sendTestEmail(pole); else showToast(`${poleId} saved`);
+};
+
+/* ---------------- tested + email ---------------- */
+async function markTested(id){
+  const updated = await setTested(id, true);
+  if (updated) await sendTestEmail(updated);
+}
+async function sendTestEmail(p){
+  const when = new Date(p.testedAt).toLocaleString();
+  const comps = (p.components||[]).length ? p.components.join(", ") : "none listed";
+  const mapLink = `https://maps.google.com/?q=${p.lat},${p.lng}`;
+  const subject = `${p.poleId} TESTED — ${when}`;
+  const body = `Pole: ${p.poleId}\nStatus: TESTED\nTime: ${when}\nComponents: ${comps}\nNotes: ${p.notes || "—"}\nLocation: ${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}\nMap: ${mapLink}`;
+  if (EMAILJS_ON) {
+    try {
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { to_email: NOTIFY_EMAIL, subject, pole_id: p.poleId, tested_at: when,
+        components: comps, notes: p.notes || "—", lat: p.lat.toFixed(6), lng: p.lng.toFixed(6), map_link: mapLink });
+      showToast(`${p.poleId} tested — email sent`);
+    } catch (e) { showToast("Tested saved, but email failed: " + (e.text || e.message), true); }
+  } else {
+    showToast(`${p.poleId} marked tested — opening email`);
+    window.location.href = `mailto:${NOTIFY_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }
+}
+
+/* ---------------- view existing ---------------- */
+const viewOverlay = $('viewOverlay'), markTestedBtn = $('markTestedBtn'), unmarkTestedBtn = $('unmarkTestedBtn');
+let viewingId = null;
+function openView(id){
+  const p = poles.find(x => x.id === id); if (!p) return;
+  viewingId = id;
+  $('viewStatus').innerHTML = p.tested
+    ? `<span class="status-pill ok">TESTED ${new Date(p.testedAt).toLocaleDateString()}</span>`
+    : `<span class="status-pill no">NOT TESTED</span>`;
+  $('viewTitle').textContent = p.poleId;
+  $('viewComponents').textContent = (p.components||[]).length ? p.components.join(", ") : "No components listed";
+  $('viewNotes').textContent = p.notes || "No notes";
+  $('viewMeta').textContent = "Added " + new Date(p.createdAt).toLocaleDateString() + " · " + p.lat.toFixed(6) + ", " + p.lng.toFixed(6);
+  markTestedBtn.classList.toggle('hidden', !!p.tested);
+  unmarkTestedBtn.classList.toggle('hidden', !p.tested);
+  show(viewOverlay);
+}
+markTestedBtn.onclick = async () => { hide(viewOverlay); await markTested(viewingId); };
+unmarkTestedBtn.onclick = async () => {
+  hide(viewOverlay); await setTested(viewingId, false);
+};
+$('editBtn').onclick = () => { const p = poles.find(x => x.id === viewingId); hide(viewOverlay); if (p) openForm(p); };
+$('gotoBtn').onclick = () => {
+  const p = poles.find(x => x.id === viewingId); if (!p) return;
+  hide(viewOverlay); followMe = false; map.setView([p.lat, p.lng], 20);
+  markerById[p.id] && markerById[p.id].openTooltip();
+};
+$('closeViewBtn').onclick = () => hide(viewOverlay);
+$('deleteBtn').onclick = async () => {
+  if (!confirm("Delete this pole from the shared inventory?")) return;
+  hide(viewOverlay); await remove(viewingId); showToast("Pole deleted");
+};
+
+/* ---------------- toast ---------------- */
+function showToast(msg, isError){
+  const t = document.createElement('div');
+  t.className = 'toast' + (isError ? ' error' : '');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3200);
+}
+</script>
+</body>
+</html>
