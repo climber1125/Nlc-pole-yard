@@ -27,7 +27,19 @@ Codes are checked on the server — they're not in the HTML, so nobody can pull 
 
 ## 1. One required edit
 
-Open `index.html`, near the top of the `<script>`, set `NOTIFY_EMAIL` to your address. Optional: change `POLE_PREFIX` if you don't want `NLC-1, NLC-2…`
+Open `index.html`, near the top of the `<script>`, set `NOTIFY_EMAIL` to your address.
+
+Also worth setting up front: `AREAS` — the sections of your pole yard (Climbing Area, Distribution Area, etc.), each with a short code. Numbering restarts at 1 within each area, so `CA1, CA2…` and `DA1, DA2…` are independent counts, not one long running number. Ships with:
+```js
+const AREAS = [
+  { code: "CA", label: "Climbing Area" },
+  { code: "DA", label: "Distribution Area" },
+  { code: "TA", label: "Transmission Area" },
+  { code: "UG", label: "Underground" },
+  { code: "RA", label: "Rigging Area" },
+];
+```
+Rename, remove, or add entries to match your actual yard — `code` is what shows up in the pole ID, `label` is the button text in the app.
 
 ## 2. Deploy (works from your phone)
 
@@ -66,7 +78,7 @@ Send everyone the link. "Add to Home Screen" gives it an app icon.
 - **I'm At the Pole — Use GPS** — locks GPS, then pan the satellite view so the pin sits exactly on the pole, Confirm.
 - **Not There — Place on Map** — skips GPS entirely, pan/zoom the satellite view to find the pole from imagery and drop the pin there. Use this for poles you're mapping from memory or from the office.
 
-Either way it pre-fills the next number (`NLC-7`), tap what's on it, notes, Save. Flip "Tested right now" if you're testing as you go.
+Either way, tap an area button and it fills in the next number for that area (`CA7` if there's already CA1–CA6) — or just type your own ID if you'd rather. Then tap what's on it, notes, Save. Flip "Tested right now" if you're testing as you go.
 
 **Dropping several poles fast (admin):** ＋ Add Pole → ⚡ Drop Several Pins Fast. Every tap on the map drops a numbered pin instantly — no GPS lock, no form, no confirm. There's also 📍 Drop at My Location for walking the yard quickly (uses your live location if ⌖ is on, otherwise grabs a fast GPS reading). Tap ✓ Done when you're finished. The pins land with no components/notes — open the Pole List afterward and fill each one in at your own pace. Good for a fast first pass through a big yard; use the regular GPS or manual flow when you want the satellite fine-tune on each pole as you go.
 
@@ -129,4 +141,4 @@ Other people's changes show up when you open the app or tap ☰ → Refresh. It 
 
 - Viewers can still see notes and coordinates. If even *viewing* should be restricted, password-protect the whole site (Site configuration → Access control) — that's a paid Netlify feature, so the code system above is the free route.
 - ☰ → Export Backup once in a while. Netlify Blobs is reliable, but a JSON file in your email is free insurance.
-- Editing the component list (Transformer, Crossarm, etc.) is just editing the chip lines in `index.html`.
+- Editing the component list (Transformer, Crossarm, etc.) or the area list is just editing those lines near the top of `index.html`.
