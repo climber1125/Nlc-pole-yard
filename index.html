@@ -94,6 +94,7 @@
   .status-pill{display:inline-block;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:700;margin-bottom:8px;}
   .status-pill.ok{background:rgba(47,191,113,.2);color:var(--green);}
   .status-pill.no{background:rgba(255,91,91,.2);color:var(--red);}
+  .status-pill.due{background:rgba(255,176,32,.2);color:var(--amber);}
 
   .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--green);
     color:#04220f;padding:12px 20px;border-radius:10px;font-weight:700;font-size:14px;z-index:100;
@@ -132,6 +133,7 @@
 
 <div class="legend">
   <span><span class="dot" style="background:#2fbf71"></span>Tested</span> &nbsp;
+  <span><span class="dot" style="background:#ffb020"></span>Due for retest</span> &nbsp;
   <span><span class="dot" style="background:#ff5b5b"></span>Not tested</span>
 </div>
 
@@ -144,6 +146,7 @@
     <div class="menu-item" id="mAccess"><span class="ic">🔑</span><div>Access<span class="sub" id="mAccessSub">Enter a crew or admin code</span></div></div>
     <div class="menu-item" id="mList"><span class="ic">📋</span><div>Pole List<span class="sub" id="mListSub">View, search, jump to any pole</span></div></div>
     <div class="menu-item" id="mRefresh"><span class="ic">🔄</span><div>Refresh<span class="sub">Pull latest from the shared map</span></div></div>
+    <div class="menu-item" id="mPrint"><span class="ic">🖨</span><div>Print Inventory<span class="sub">Clean table — pole #, status, tested by, dates</span></div></div>
     <div class="menu-item" id="mExport"><span class="ic">⬇</span><div>Export Backup<span class="sub">Save all poles to a file</span></div></div>
     <div class="menu-item admin-only" id="mImport"><span class="ic">⬆</span><div>Import Backup<span class="sub">Load poles from a file into the shared map</span></div></div>
     <div class="menu-item admin-only" id="mReset"><span class="ic">↺</span><div>Reset All Tests<span class="sub">New testing round — inventory stays</span></div></div>
@@ -174,11 +177,24 @@
     <div class="filter-row">
       <button class="on" data-f="all">All</button>
       <button data-f="untested">Not Tested</button>
-      <button data-f="tested">Tested</button>
+      <button data-f="due">Due for Retest</button>
+      <button data-f="tested">Tested &amp; Current</button>
     </div>
-    <input type="text" id="listSearch" placeholder="Search pole # or notes">
+    <input type="text" id="listSearch" placeholder="Search pole #, notes, components, or tester">
     <div id="listBody" style="margin-top:8px;"></div>
     <button class="big-btn secondary" id="listClose">Close</button>
+  </div>
+</div>
+
+<!-- TESTER NAME -->
+<div class="overlay hidden" id="testerOverlay">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2>Who Tested This?</h2>
+    <label>Your name</label>
+    <input type="text" id="testerNameInput" placeholder="First and last name">
+    <button class="big-btn green" id="testerGoBtn">Confirm &amp; Send Email</button>
+    <button class="big-btn secondary" id="testerCancelBtn">Cancel</button>
   </div>
 </div>
 
@@ -284,6 +300,7 @@ const EMAILJS_PUBLIC_KEY = "";
 const EMAILJS_SERVICE_ID = "";
 const EMAILJS_TEMPLATE_ID = "";
 const POLE_PREFIX = "NLC-";
+const RETEST_DAYS = 365; // poles tested longer ago than this show amber "due for retest"
 const API = "/api/poles";
 /* ========================================================= */
 
@@ -336,8 +353,8 @@ async function apiDelete(id){
   if (r.status === 403) throw new Error("FORBIDDEN");
   if (!r.ok) throw new Error(await r.text());
 }
-async function apiTested(id, tested){
-  const r = await fetch(`${API}/${encodeURIComponent(id)}/tested`, { method:'POST', headers:{'Content-Type':'application/json', ...hdr()}, body: JSON.stringify({ tested }) });
+async function apiTested(id, tested, testedBy){
+  const r = await fetch(`${API}/${encodeURIComponent(id)}/tested`, { method:'POST', headers:{'Content-Type':'application/json', ...hdr()}, body: JSON.stringify({ tested, testedBy }) });
   if (r.status === 403) throw new Error("FORBIDDEN");
   if (!r.ok) throw new Error(await r.text());
   return r.json();
@@ -365,14 +382,14 @@ async function remove(id){
     savePending(); setSync('bad', `${pending.length} unsynced`);
   }
 }
-async function setTested(id, tested){
+async function setTested(id, tested, testedBy){
   const i = poles.findIndex(p => p.id === id); if (i < 0) return null;
-  poles[i] = { ...poles[i], tested, testedAt: tested ? new Date().toISOString() : null };
+  poles[i] = { ...poles[i], tested, testedAt: tested ? new Date().toISOString() : null, testedBy: tested ? (testedBy || poles[i].testedBy || "") : null };
   cache(); redrawMarkers();
-  try { const u = await apiTested(id, tested); poles[i] = u; cache(); redrawMarkers(); setSync('ok', 'synced'); return u; }
+  try { const u = await apiTested(id, tested, testedBy); poles[i] = u; cache(); redrawMarkers(); setSync('ok', 'synced'); return u; }
   catch (e) {
     if (e.message === "FORBIDDEN") { showToast("Crew or admin code required", true); await refresh(true); return null; }
-    pending = pending.filter(x => !(x.id === id && x.op === 'tested')); pending.push({ op:'tested', id, tested });
+    pending = pending.filter(x => !(x.id === id && x.op === 'tested')); pending.push({ op:'tested', id, tested, testedBy });
     savePending(); setSync('bad', `${pending.length} unsynced`);
     return poles[i];
   }
@@ -384,7 +401,7 @@ async function flushPending(){
     try {
       if (job.op === 'put') await apiPut(job.pole);
       else if (job.op === 'del') await apiDelete(job.id);
-      else if (job.op === 'tested') await apiTested(job.id, job.tested);
+      else if (job.op === 'tested') await apiTested(job.id, job.tested, job.testedBy);
     } catch (e) { if (e.message !== "FORBIDDEN") still.push(job); }
   }
   pending = still; savePending();
@@ -416,19 +433,31 @@ const markerLayer = L.layerGroup().addTo(map);
 const markerById = {};
 let firstFit = false;
 
+function daysSince(iso){ return (Date.now() - new Date(iso).getTime()) / 86400000; }
+function poleState(p){ // 'untested' | 'due' | 'ok'
+  if (!p.tested || !p.testedAt) return 'untested';
+  return daysSince(p.testedAt) >= RETEST_DAYS ? 'due' : 'ok';
+}
+function nextDueDate(p){
+  if (!p.tested || !p.testedAt) return null;
+  const d = new Date(p.testedAt); d.setDate(d.getDate() + RETEST_DAYS); return d;
+}
+const STATE_COLOR = { untested:'#ff5b5b', due:'#ffb020', ok:'#2fbf71' };
+
 function redrawMarkers(){
   markerLayer.clearLayers();
-  let tested = 0;
+  let tested = 0, due = 0;
   poles.forEach(p => {
+    const state = poleState(p);
     if (p.tested) tested++;
-    const color = p.tested ? '#2fbf71' : '#ff5b5b';
-    const m = L.circleMarker([p.lat, p.lng], { radius: 9, color:'#fff', weight:2, fillColor: color, fillOpacity: 0.95 });
+    if (state === 'due') due++;
+    const m = L.circleMarker([p.lat, p.lng], { radius: 9, color:'#fff', weight:2, fillColor: STATE_COLOR[state], fillOpacity: 0.95 });
     m.bindTooltip(String(p.poleId), { permanent: true, direction: 'top', offset: [0,-8], className: 'pole-label' });
     m.on('click', () => { if (measureActive) addMeasurePoint([p.lat, p.lng]); else openView(p.id); });
     m.addTo(markerLayer);
     markerById[p.id] = m;
   });
-  $('count').textContent = `${poles.length} poles · ${tested} tested · ${poles.length - tested} remaining`;
+  $('count').textContent = `${poles.length} poles · ${tested} tested · ${poles.length - tested} remaining` + (due ? ` · ${due} due for retest` : '');
   $('mListSub').textContent = `${poles.length} poles · ${poles.length - tested} still to test`;
   if (poles.length && !firstFit) { fitAll(); firstFit = true; }
 }
@@ -537,6 +566,49 @@ $('accessOut').onclick = async () => {
   accessKey = ""; localStorage.removeItem(KEY_KEY); await checkRole(); hide($('accessOverlay')); showToast("Back to viewer");
 };
 $('mRefresh').onclick = () => { hide($('menuOverlay')); refresh(false); };
+$('mPrint').onclick = () => { hide($('menuOverlay')); printInventory(); };
+
+function printInventory(){
+  if (!poles.length) { showToast("No poles to print."); return; }
+  const rows = [...poles].sort((a,b) => String(a.poleId).localeCompare(String(b.poleId), undefined, { numeric:true }));
+  let tested = 0, due = 0;
+  const trs = rows.map(p => {
+    const state = poleState(p);
+    if (p.tested) tested++; if (state === 'due') due++;
+    const statusLabel = state === 'untested' ? 'NOT TESTED' : (state === 'due' ? 'DUE FOR RETEST' : 'TESTED');
+    const dueDate = nextDueDate(p);
+    return `<tr>
+      <td>${esc(p.poleId)}</td>
+      <td class="s-${state}">${statusLabel}</td>
+      <td>${esc((p.components||[]).join(', ') || '—')}</td>
+      <td>${esc(p.notes || '—')}</td>
+      <td>${esc(p.testedBy || '—')}</td>
+      <td>${p.testedAt ? new Date(p.testedAt).toLocaleDateString() : '—'}</td>
+      <td>${dueDate ? dueDate.toLocaleDateString() : '—'}</td>
+      <td>${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}</td>
+    </tr>`;
+  }).join('');
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>NLC Pole Yard Inventory</title>
+  <style>
+    body{font-family:-apple-system,Arial,sans-serif;margin:24px;color:#111;}
+    h1{margin:0 0 2px;font-size:20px;} .meta{color:#555;font-size:12px;margin-bottom:16px;}
+    table{border-collapse:collapse;width:100%;font-size:11px;}
+    th,td{border:1px solid #ccc;padding:5px 7px;text-align:left;vertical-align:top;}
+    th{background:#eee;}
+    .s-untested{color:#b00000;font-weight:700;} .s-due{color:#a06000;font-weight:700;} .s-ok{color:#0a7a2f;font-weight:700;}
+    @media print{ body{margin:8mm;} }
+  </style></head><body>
+  <h1>NLC Pole Yard — Inventory</h1>
+  <div class="meta">Printed ${new Date().toLocaleString()} · ${rows.length} poles · ${tested} tested · ${rows.length-tested} not tested · ${due} due for retest</div>
+  <table><thead><tr><th>Pole</th><th>Status</th><th>Components</th><th>Notes</th><th>Tested By</th><th>Tested Date</th><th>Retest Due</th><th>GPS</th></tr></thead>
+  <tbody>${trs}</tbody></table>
+  <script>window.onload = () => setTimeout(() => window.print(), 200);<\/script>
+  </body></html>`;
+  const win = window.open('', '_blank');
+  if (!win) { showToast("Pop-up blocked — allow pop-ups for this site to print.", true); return; }
+  win.document.write(html); win.document.close();
+}
+function esc(str){ const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
 $('mExport').onclick = () => {
   const blob = new Blob([JSON.stringify(poles, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -588,16 +660,20 @@ function renderList(){
   const q = $('listSearch').value.trim().toLowerCase();
   const body = $('listBody'); body.innerHTML = "";
   const rows = poles
-    .filter(p => listFilter === 'all' || (listFilter === 'tested') === !!p.tested)
-    .filter(p => !q || String(p.poleId).toLowerCase().includes(q) || (p.notes||'').toLowerCase().includes(q) || (p.components||[]).join(' ').toLowerCase().includes(q))
+    .filter(p => listFilter === 'all' || poleState(p) === listFilter)
+    .filter(p => !q || String(p.poleId).toLowerCase().includes(q) || (p.notes||'').toLowerCase().includes(q)
+      || (p.components||[]).join(' ').toLowerCase().includes(q) || (p.testedBy||'').toLowerCase().includes(q))
     .sort((a,b) => String(a.poleId).localeCompare(String(b.poleId), undefined, { numeric:true }));
   if (!rows.length) { body.innerHTML = '<p style="text-align:center;">No poles match.</p>'; return; }
   rows.forEach(p => {
+    const state = poleState(p);
     const d = document.createElement('div');
     d.className = 'list-item';
-    d.innerHTML = `<div class="st" style="background:${p.tested ? '#2fbf71' : '#ff5b5b'}"></div>
+    const statusText = state === 'untested' ? '' :
+      (state === 'due' ? ' · DUE, tested ' : ' · tested ') + new Date(p.testedAt).toLocaleDateString() + (p.testedBy ? ' by ' + p.testedBy : '');
+    d.innerHTML = `<div class="st" style="background:${STATE_COLOR[state]}"></div>
       <div><div class="name">${p.poleId}</div>
-      <div class="meta">${(p.components||[]).length ? p.components.join(', ') : 'no components'}${p.tested ? ' · tested ' + new Date(p.testedAt).toLocaleDateString() : ''}</div></div>
+      <div class="meta">${(p.components||[]).length ? p.components.join(', ') : 'no components'}${statusText}</div></div>
       <div class="arrow">›</div>`;
     d.onclick = () => { hide($('listOverlay')); openView(p.id); };
     body.appendChild(d);
@@ -710,26 +786,45 @@ $('saveBtn').onclick = async () => {
     return;
   }
   const pole = { id: 'p_' + Date.now(), poleId, components, notes, lat: pendingCoords.lat, lng: pendingCoords.lng,
-    createdAt: new Date().toISOString(), tested: false, testedAt: null };
-  if (testedNow.checked) { pole.tested = true; pole.testedAt = new Date().toISOString(); }
+    createdAt: new Date().toISOString(), tested: false, testedAt: null, testedBy: null };
+  const wantsTested = testedNow.checked;
   await persist(pole);
-  if (pole.tested) await sendTestEmail(pole); else showToast(`${poleId} saved`);
+  if (wantsTested) promptTesterName(async (name) => { const u = await setTested(pole.id, true, name); if (u) await sendTestEmail(u); });
+  else showToast(`${poleId} saved`);
 };
 
-/* ---------------- tested + email ---------------- */
+/* ---------------- tested-by prompt + email ---------------- */
+const LAST_TESTER_KEY = "campusPolesLastTester";
+function promptTesterName(callback){
+  $('testerNameInput').value = localStorage.getItem(LAST_TESTER_KEY) || "";
+  pendingTesterCallback = callback;
+  show($('testerOverlay'));
+}
+let pendingTesterCallback = null;
+$('testerCancelBtn').onclick = () => { pendingTesterCallback = null; hide($('testerOverlay')); };
+$('testerGoBtn').onclick = async () => {
+  const name = $('testerNameInput').value.trim();
+  if (!name) { showToast("Enter a name first", true); return; }
+  localStorage.setItem(LAST_TESTER_KEY, name);
+  hide($('testerOverlay'));
+  if (pendingTesterCallback) { const cb = pendingTesterCallback; pendingTesterCallback = null; await cb(name); }
+};
+
 async function markTested(id){
-  const updated = await setTested(id, true);
-  if (updated) await sendTestEmail(updated);
+  promptTesterName(async (name) => {
+    const updated = await setTested(id, true, name);
+    if (updated) await sendTestEmail(updated);
+  });
 }
 async function sendTestEmail(p){
   const when = new Date(p.testedAt).toLocaleString();
   const comps = (p.components||[]).length ? p.components.join(", ") : "none listed";
   const mapLink = `https://maps.google.com/?q=${p.lat},${p.lng}`;
   const subject = `${p.poleId} TESTED — ${when}`;
-  const body = `Pole: ${p.poleId}\nStatus: TESTED\nTime: ${when}\nComponents: ${comps}\nNotes: ${p.notes || "—"}\nLocation: ${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}\nMap: ${mapLink}`;
+  const body = `Pole: ${p.poleId}\nStatus: TESTED\nTested by: ${p.testedBy || "—"}\nTime: ${when}\nComponents: ${comps}\nNotes: ${p.notes || "—"}\nLocation: ${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}\nMap: ${mapLink}`;
   if (EMAILJS_ON) {
     try {
-      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { to_email: NOTIFY_EMAIL, subject, pole_id: p.poleId, tested_at: when,
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, { to_email: NOTIFY_EMAIL, subject, pole_id: p.poleId, tested_by: p.testedBy || "—", tested_at: when,
         components: comps, notes: p.notes || "—", lat: p.lat.toFixed(6), lng: p.lng.toFixed(6), map_link: mapLink });
       showToast(`${p.poleId} tested — email sent`);
     } catch (e) { showToast("Tested saved, but email failed: " + (e.text || e.message), true); }
@@ -745,13 +840,17 @@ let viewingId = null;
 function openView(id){
   const p = poles.find(x => x.id === id); if (!p) return;
   viewingId = id;
-  $('viewStatus').innerHTML = p.tested
-    ? `<span class="status-pill ok">TESTED ${new Date(p.testedAt).toLocaleDateString()}</span>`
-    : `<span class="status-pill no">NOT TESTED</span>`;
+  const state = poleState(p);
+  if (state === 'untested') $('viewStatus').innerHTML = `<span class="status-pill no">NOT TESTED</span>`;
+  else if (state === 'due') $('viewStatus').innerHTML = `<span class="status-pill due">DUE FOR RETEST</span> <span class="status-pill ok">tested ${new Date(p.testedAt).toLocaleDateString()}${p.testedBy ? ' by ' + p.testedBy : ''}</span>`;
+  else $('viewStatus').innerHTML = `<span class="status-pill ok">TESTED ${new Date(p.testedAt).toLocaleDateString()}${p.testedBy ? ' by ' + p.testedBy : ''}</span>`;
   $('viewTitle').textContent = p.poleId;
   $('viewComponents').textContent = (p.components||[]).length ? p.components.join(", ") : "No components listed";
   $('viewNotes').textContent = p.notes || "No notes";
-  $('viewMeta').textContent = "Added " + new Date(p.createdAt).toLocaleDateString() + " · " + p.lat.toFixed(6) + ", " + p.lng.toFixed(6);
+  const due = nextDueDate(p);
+  $('viewMeta').textContent = "Added " + new Date(p.createdAt).toLocaleDateString()
+    + (due ? " · retest due " + due.toLocaleDateString() : "")
+    + " · " + p.lat.toFixed(6) + ", " + p.lng.toFixed(6);
   if (meMarker) {
     const me = meMarker.getLatLng();
     $('viewDistance').textContent = `📍 ${fmtDist(distFeet(me.lat, me.lng, p.lat, p.lng))} from you`;
@@ -762,7 +861,7 @@ function openView(id){
 }
 markTestedBtn.onclick = async () => { hide(viewOverlay); await markTested(viewingId); };
 unmarkTestedBtn.onclick = async () => {
-  hide(viewOverlay); await setTested(viewingId, false);
+  hide(viewOverlay); await setTested(viewingId, false, null);
 };
 $('editBtn').onclick = () => { const p = poles.find(x => x.id === viewingId); hide(viewOverlay); if (p) openForm(p); };
 $('repositionBtn').onclick = () => {
