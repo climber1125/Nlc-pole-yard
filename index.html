@@ -145,6 +145,7 @@
     <div class="grab"></div>
     <div class="menu-item" id="mAccess"><span class="ic">🔑</span><div>Access<span class="sub" id="mAccessSub">Enter a crew or admin code</span></div></div>
     <div class="menu-item" id="mList"><span class="ic">📋</span><div>Pole List<span class="sub" id="mListSub">View, search, jump to any pole</span></div></div>
+    <div class="menu-item" id="mViews"><span class="ic">📌</span><div>Saved Views<span class="sub">Bookmark a spot on the map, share as a link</span></div></div>
     <div class="menu-item" id="mRefresh"><span class="ic">🔄</span><div>Refresh<span class="sub">Pull latest from the shared map</span></div></div>
     <div class="menu-item" id="mPrint"><span class="ic">🖨</span><div>Print Inventory<span class="sub">Clean table — pole #, status, tested by, dates</span></div></div>
     <div class="menu-item" id="mExport"><span class="ic">⬇</span><div>Export Backup<span class="sub">Save all poles to a file</span></div></div>
@@ -166,6 +167,19 @@
     <button class="big-btn green" id="accessGo">Unlock</button>
     <button class="big-btn secondary hidden" id="accessOut">Sign out (back to viewer)</button>
     <button class="big-btn secondary" id="accessClose">Close</button>
+  </div>
+</div>
+
+<!-- SAVED VIEWS -->
+<div class="overlay hidden" id="viewsOverlay">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2>Saved Views</h2>
+    <label>Save the map's current position</label>
+    <input type="text" id="viewNameInput" placeholder="e.g. North Yard, Training Field">
+    <button class="big-btn green" id="saveViewBtn">＋ Save Current View</button>
+    <div id="savedViewsList" style="margin-top:14px;"></div>
+    <button class="big-btn secondary" id="viewsClose">Close</button>
   </div>
 </div>
 
@@ -281,6 +295,7 @@
     <button class="big-btn secondary admin-only" id="editBtn">Edit Details</button>
     <button class="big-btn secondary admin-only" id="repositionBtn">📍 Reposition Pin</button>
     <button class="big-btn secondary" id="gotoBtn">Show on Map</button>
+    <button class="big-btn secondary" id="shareBtn">🔗 Share Link to This Pole</button>
     <button class="big-btn red admin-only" id="deleteBtn">Delete This Pole</button>
     <button class="big-btn secondary" id="closeViewBtn">Close</button>
   </div>
@@ -501,11 +516,82 @@ function addMeasurePoint(ll){
   }
 }
 
+/* ---------------- share links (pole + saved map view) ---------------- */
+function baseUrl(){ return location.origin + location.pathname; }
+async function shareOrCopy(url, title){
+  if (navigator.share) { try { await navigator.share({ title, url }); return; } catch(e) { /* user cancelled or unsupported, fall through */ } }
+  try { await navigator.clipboard.writeText(url); showToast("Link copied — paste it in a text or email"); }
+  catch(e) { prompt("Copy this link:", url); }
+}
+function poleLink(p){ return `${baseUrl()}?pole=${encodeURIComponent(p.poleId)}`; }
+function viewLink(v){ return `${baseUrl()}?lat=${v.lat.toFixed(6)}&lng=${v.lng.toFixed(6)}&z=${v.zoom}`; }
+
+$('shareBtn').onclick = () => {
+  const p = poles.find(x => x.id === viewingId); if (!p) return;
+  shareOrCopy(poleLink(p), `Pole ${p.poleId} — NLC Pole Yard`);
+};
+
+/* ---------------- saved views (device-local bookmarks) ---------------- */
+const VIEWS_KEY = "campusPolesSavedViews";
+function loadViews(){ try { return JSON.parse(localStorage.getItem(VIEWS_KEY)) || []; } catch(e){ return []; } }
+function saveViewsList(v){ localStorage.setItem(VIEWS_KEY, JSON.stringify(v)); }
+let savedViews = loadViews();
+
+$('mViews').onclick = () => { hide($('menuOverlay')); openViews(); };
+$('viewsClose').onclick = () => hide($('viewsOverlay'));
+function openViews(){ $('viewNameInput').value = ""; renderViews(); show($('viewsOverlay')); }
+function renderViews(){
+  const body = $('savedViewsList'); body.innerHTML = "";
+  if (!savedViews.length) { body.innerHTML = '<p style="text-align:center;">No saved views yet.</p>'; return; }
+  savedViews.forEach(v => {
+    const d = document.createElement('div');
+    d.className = 'list-item';
+    d.innerHTML = `<div class="st" style="background:var(--accent)"></div>
+      <div style="flex:1;"><div class="name">${esc(v.name)}</div><div class="meta">${v.lat.toFixed(5)}, ${v.lng.toFixed(5)} · zoom ${v.zoom}</div></div>`;
+    const jumpBtn = document.createElement('button');
+    jumpBtn.className = 'icon-btn'; jumpBtn.textContent = 'Go'; jumpBtn.style.marginRight = '4px';
+    jumpBtn.onclick = () => { hide($('viewsOverlay')); followMe = false; map.setView([v.lat, v.lng], v.zoom); };
+    const shareBtn2 = document.createElement('button');
+    shareBtn2.className = 'icon-btn'; shareBtn2.textContent = '🔗'; shareBtn2.style.marginRight = '4px';
+    shareBtn2.onclick = () => shareOrCopy(viewLink(v), `${v.name} — NLC Pole Yard`);
+    const delBtn = document.createElement('button');
+    delBtn.className = 'icon-btn'; delBtn.textContent = '🗑';
+    delBtn.onclick = () => { savedViews = savedViews.filter(x => x.id !== v.id); saveViewsList(savedViews); renderViews(); };
+    d.appendChild(jumpBtn); d.appendChild(shareBtn2); d.appendChild(delBtn);
+    body.appendChild(d);
+  });
+}
+$('saveViewBtn').onclick = () => {
+  const name = $('viewNameInput').value.trim();
+  if (!name) { showToast("Give this view a name first", true); return; }
+  const c = map.getCenter();
+  savedViews.push({ id: 'v_' + Date.now(), name, lat: c.lat, lng: c.lng, zoom: map.getZoom() });
+  saveViewsList(savedViews);
+  $('viewNameInput').value = "";
+  renderViews();
+  showToast(`Saved "${name}"`);
+};
+
+/* ---------------- open from a shared link ---------------- */
+const urlParams = new URLSearchParams(location.search);
+const linkedPoleId = urlParams.get('pole');
+const linkedLat = parseFloat(urlParams.get('lat')), linkedLng = parseFloat(urlParams.get('lng')), linkedZoom = parseInt(urlParams.get('z'), 10);
+if (!isNaN(linkedLat) && !isNaN(linkedLng)) {
+  map.setView([linkedLat, linkedLng], isNaN(linkedZoom) ? 19 : linkedZoom);
+  firstFit = true; // don't let redrawMarkers override this with fitAll
+}
+function tryOpenLinkedPole(){
+  if (!linkedPoleId) return;
+  const p = poles.find(x => String(x.poleId) === linkedPoleId);
+  if (p) { firstFit = true; map.setView([p.lat, p.lng], 20); openView(p.id); }
+}
+
 redrawMarkers();
+tryOpenLinkedPole();
 applyRole();
 checkRole();
-refresh(true);
-if (!poles.length) navigator.geolocation && navigator.geolocation.getCurrentPosition(
+refresh(true).then(tryOpenLinkedPole); // in case the pole wasn't in local cache yet
+if (!poles.length && !linkedPoleId && isNaN(linkedLat)) navigator.geolocation && navigator.geolocation.getCurrentPosition(
   pos => { if (!firstFit) map.setView([pos.coords.latitude, pos.coords.longitude], 18); }, () => {}, { enableHighAccuracy:false, timeout:5000 });
 
 /* ---------------- next ID suggestion ---------------- */
