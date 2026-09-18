@@ -74,7 +74,11 @@ Give instructors the crew code. Keep the admin code to yourself or whoever manag
 
 Send everyone the link. "Add to Home Screen" gives it an app icon.
 
-**Mapping a pole (admin):** ＋ Add Pole → choose:
+**Item types:** the yard isn't just poles anymore. ＋ Add Item now asks what you're adding first — **Pole**, **Pad-Mount Transformer**, **Pedestal**, **Building/Shed**, **Underground Pit**, or a **Conductor Span** — then walks you through the right flow for that type. Each type gets its own icon on the map (⚡ transformer, 🔌 pedestal, 🏚 building, 🕳️ pit, 🔗 span) so you can tell them apart at a glance; poles stay plain colored dots like before.
+
+**Labeling underground pits:** transformers and pedestals use the same Area system as poles — so a pad-mount in the underground lot gets a label like `UG1`, `UG2`, tapping the **Underground** area chip when you add it. Each pit-mounted piece gets its own coded, unique label the same way poles do. Buildings default to the **Buildings & Sheds** area (`BLD1`, `BLD2`...).
+
+**Mapping a pole, transformer, or pedestal (admin):** ＋ Add Item → pick the type → choose:
 - **I'm At the Pole — Use GPS** — locks GPS, then pan the satellite view so the pin sits exactly on the pole, Confirm.
 - **Not There — Place on Map** — skips GPS entirely, pan/zoom the satellite view to find the pole from imagery and drop the pin there. Use this for poles you're mapping from memory or from the office.
 
@@ -86,6 +90,16 @@ Either way, tap an area button and it fills in the next number for that area (`C
 
 **Moving multiple pins together (admin):** ☰ → Move Multiple Pins → tap each pole on the map you want to shift (they ring yellow when selected) → 🧲 Move Selected Together → drag the magnet handle on the satellite view and every selected pole moves with it as one group → Confirm — Move All. Good for correcting a whole cluster that's off by the same amount (a batch drop that landed shifted, or a run of poles that all need to move together) instead of repositioning each one individually.
 
+**Buildings, sheds & pits (admin):** ＋ Add Item → Building/Shed or Underground Pit → drop it like anything else (GPS or place-on-map). Neither has a components list or a test button — instead each has an editable **inventory**: open it → 📦 Edit Inventory → add rows (item name + quantity), remove any, Save. Anyone with the link can see what's inside; only admins can edit the list.
+
+**Marking a building, shed, or pit as an area instead of a point:** these two types can be outlined instead of pinned as a single dot. ＋ Add Item → Building/Shed or Underground Pit → **🔲 Mark as an Area (4 Corner Pins)** → tap the four corners of the footprint on the map, in order around its edge → it auto-fills in and drops you into the usual label form. The map draws the outline; the item still has a single record (label, notes, inventory) at its center. To fix a boundary later, open the item → **🔲 Redraw Boundary (4 Corners)** and tap four new corners — or use **📍 Reposition Pin** if it was placed as a plain point and you just want to move the dot.
+
+**Conductor spans — tracking wire/conductor size between two structures:** a conductor runs between two structures, so it's tracked as a line rather than a field on one record (useful since a single pole can have several conductors leaving it in different directions). ＋ Add Item → **🔗 Conductor Span** → tap the first pole/transformer/pedestal it leaves from, then tap the second one it connects to → enter the **Conductor Size** (e.g. `4/0 ACSR`, `397 MCM AAC`) and any notes → Save. The line is drawn live between the two structures' current positions — if you move or reposition either endpoint, the span follows automatically. Tap the line (or its label) on the map, or find it in the Pole List, to view, edit, or delete it. Deleting either endpoint deletes its spans too.
+
+**Creating a work order (crew or admin):** open any pole, transformer, or pedestal → 🧾 Create Work Order → fill in Trainee, Instructor, Priority, and what the trouble is → Generate & Print. This builds a page matching NLC's field work order template exactly — Circuit Information, Reported Trouble, Safety/Hazard Notes (pre-filled from the item's notes), the Crew & PPE checklist, Materials Used (pre-filled from what's on file for that structure), and signature lines — with a **QR code** at the bottom that scans straight back to that item's page in the app. It opens in a new tab ready to print; remembers the last trainee/instructor typed so repeat work orders are faster. Buildings/sheds don't get work orders (they're not something you troubleshoot).
+
+**Deleting several items at once (admin):** ☰ → Delete Multiple → tap each item on the map (rings yellow) → 🗑 Delete Selected → confirm. Same select-then-act pattern as the move and bulk-test tools.
+
 **Fixing a pin that's in the wrong spot (admin):** open the pole → **📍 Reposition Pin** → drag the satellite map so the pin lands on the correct spot → Confirm. Doesn't touch the pole's number, components, or notes — just moves it.
 
 **Testing (crew or admin):** tap a pole on the map or in the list → ✅ Mark Tested & Email → it asks who's testing (remembers the last name typed, so it's a one-tap confirm after the first time) → turns green for everyone, email fires with the tester's name in it.
@@ -96,9 +110,9 @@ Either way, tap an area button and it fills in the next number for that area (`C
 
 **Saved Views (bookmark a spot on the map):** ☰ → Saved Views. Pan/zoom the map to wherever you want (e.g. "North Yard"), name it, ＋ Save Current View. Each saved view has **Go** (jump there), **🔗** (share as a link — opens the app zoomed to that exact spot), and 🗑 (delete). Saved views live on your phone only, not shared with the team — the link is what makes a view shareable.
 
-**Printing the inventory:** ☰ → Print Inventory — opens a clean table (pole #, status, components, notes, tested by, tested date, retest-due date, GPS) in a new tab, print-ready. Good for a binder or a compliance file.
+**Printing the inventory:** ☰ → Print Inventory — opens a clean table (ID, type, status, components, notes, tested by, tested date, retest-due date, GPS) for every pole/transformer/pedestal, a Buildings, Sheds & Pits table with each one's inventory, and a Conductor Spans table (between, size, notes), in a new tab, print-ready. Good for a binder or a compliance file.
 
-**Finding what's left:** ☰ → Pole List → "Not Tested" filter. Header always shows `42 poles · 30 tested · 12 remaining`.
+**Finding what's left:** ☰ → Pole List → "Not Tested" filter (buildings, sheds, pits, and spans don't show under test-status filters since they're never "tested" — they only show under "All"). Header shows `42 items · 38 testable · 30 tested · 8 remaining`.
 
 **Changing a pole (admin):** open it → Edit Details. Updates for everyone.
 
@@ -141,4 +155,10 @@ Other people's changes show up when you open the app or tap ☰ → Refresh. It 
 
 - Viewers can still see notes and coordinates. If even *viewing* should be restricted, password-protect the whole site (Site configuration → Access control) — that's a paid Netlify feature, so the code system above is the free route.
 - ☰ → Export Backup once in a while. Netlify Blobs is reliable, but a JSON file in your email is free insurance.
-- Editing the component list (Transformer, Crossarm, etc.) or the area list is just editing those lines near the top of `index.html`.
+- Editing the component list (Transformer, Crossarm, etc.), the area list, or the item types is just editing those lines near the top of `index.html`.
+- Work order QR codes are generated by a free third-party service (api.qrserver.com) at print time — it needs internet access when you print, same as everything else in the app, and nothing about your poles is sent to it beyond the link itself.
+- Work orders aren't saved anywhere — each one is generated fresh with a unique Work Order # when you print it. If you need a record of which work orders were issued, that's worth adding later (would need a small server change, not just this file).
+
+## NetSuite
+
+Not built. NetSuite is reachable from here, but wiring it up is a real side project, not a checkbox: it needs an integration record set up inside NetSuite by an admin, OAuth-based tokens (not a simple API key), and a server-side proxy so credentials never touch the browser. Worth doing once there's a clear use case — e.g. pushing tested poles as asset records, or pulling transformer specs from NetSuite instead of storing them here. Say what should flow between the two systems and that becomes its own scoped build.
