@@ -518,6 +518,13 @@ const SPEC_PRESETS = [
 // outside ITEM_TYPES (which drives the pin add-flow) but still need a lookup entry.
 const SPAN_TYPE = { key: "span", label: "Conductor Span", icon: "🔗", hasTest: false, hasComponents: false, hasInventory: false, hasArea: false };
 function itemTypeInfo(key){ if (key === "span") return SPAN_TYPE; return ITEM_TYPES.find(t => t.key === key) || ITEM_TYPES[0]; }
+// Exact count per item type. Records with no/unknown itemType count as poles (same rule as itemTypeInfo).
+const TYPE_PLURAL = { pole:"poles", transformer:"transformers", pedestal:"pedestals", building:"buildings/sheds", pit:"UG pits", span:"spans" };
+function typeCounts(){
+  const c = { span: 0 }; ITEM_TYPES.forEach(t => c[t.key] = 0);
+  poles.forEach(p => { if (p.itemType === 'span') { c.span++; return; } c[itemTypeInfo(p.itemType||'pole').key]++; });
+  return c;
+}
 const RETEST_DAYS = 365; // poles tested longer ago than this show amber "due for retest"
 const API = "/api/poles";
 const POLICIES_API = "/api/policies";
@@ -724,8 +731,13 @@ function redrawMarkers(){
     line.addTo(spanLayer);
     markerById[sp.id] = line;
   });
-  $('count').textContent = `${pointItems.length} items · ${testableCount} testable · ${tested} tested · ${testableCount - tested} remaining` + (due ? ` · ${due} due for retest` : '');
-  $('mListSub').textContent = `${poles.length} items · ${testableCount - tested} still to test`;
+  const tc = typeCounts();
+  const otherBits = ITEM_TYPES.filter(t => t.key !== 'pole' && tc[t.key])
+    .map(t => `${tc[t.key]} ${TYPE_PLURAL[t.key]}`);
+  $('count').innerHTML =
+    `<b>${tc.pole} poles</b> · ${tested} tested · ${testableCount - tested} remaining` + (due ? ` · ${due} due for retest` : '') +
+    (otherBits.length ? `<br>Other: ${otherBits.join(' · ')}` : '');
+  $('mListSub').textContent = `${tc.pole} poles · ${testableCount - tested} still to test`;
   if (poles.length && !firstFit) { fitAll(); firstFit = true; }
 }
 function fitAll(){
@@ -1238,6 +1250,7 @@ function printInventory(){
   const structures = poles.filter(p => p.itemType !== 'span' && !itemTypeInfo(p.itemType||'pole').hasTest)
     .sort((a,b) => String(a.poleId).localeCompare(String(b.poleId), undefined, { numeric:true }));
   let tested = 0, due = 0;
+  const tc = typeCounts();
   const trs = testable.map(p => {
     const info = itemTypeInfo(p.itemType||'pole');
     const state = poleState(p);
@@ -1285,7 +1298,13 @@ function printInventory(){
     @media print{ body{margin:8mm;} }
   </style></head><body>
   <h1>NLC Pole Yard — Inventory</h1>
-  <div class="meta">Printed ${new Date().toLocaleString()} · ${testable.length} testable items · ${tested} tested · ${testable.length-tested} not tested · ${due} due for retest · ${structures.length} other items (buildings, sheds, pits, transformers, pedestals)</div>
+  <div class="meta">Printed ${new Date().toLocaleString()}</div>
+  <table style="width:auto;margin-bottom:18px;font-size:13px;"><thead><tr><th>Type</th><th>Count</th></tr></thead><tbody>
+    <tr><td><b>Poles</b></td><td><b>${tc.pole}</b> (${tested} tested · ${testable.length-tested} not tested · ${due} due for retest)</td></tr>
+    ${ITEM_TYPES.filter(t => t.key !== 'pole').map(t => `<tr><td>${esc(t.label)}</td><td>${tc[t.key]}</td></tr>`).join('')}
+    <tr><td>Conductor Spans</td><td>${tc.span}</td></tr>
+  </tbody></table>
+  <h1>Poles</h1>
   <table><thead><tr><th>ID</th><th>Type</th><th>Status</th><th>Components</th><th>Notes</th><th>Tested By</th><th>Tested Date</th><th>Retest Due</th><th>GPS</th></tr></thead>
   <tbody>${trs}</tbody></table>
   ${structSection}
