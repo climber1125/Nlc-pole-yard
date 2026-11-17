@@ -64,8 +64,8 @@
   .list-item .name{font-weight:700;font-size:15px;}
   .list-item .meta{font-size:12px;color:var(--sub);}
   .list-item .arrow{margin-left:auto;color:var(--sub);}
-  .filter-row{display:flex;gap:8px;margin-bottom:8px;}
-  .filter-row button{flex:1;padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--sub);font-size:13px;font-weight:600;}
+  .filter-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+  .filter-row button{flex:1 1 30%;padding:9px 6px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:var(--sub);font-size:13px;font-weight:600;}
   .filter-row button.on{background:var(--accent);border-color:var(--accent);color:#fff;}
 
   .acc-ring{width:70px;height:70px;border-radius:50%;border:5px solid var(--accent);
@@ -223,6 +223,7 @@
       <button data-f="untested">Not Tested</button>
       <button data-f="due">Due for Retest</button>
       <button data-f="tested">Tested &amp; Current</button>
+      <button data-f="other">Other Items</button>
     </div>
     <input type="text" id="listSearch" placeholder="Search pole #, notes, components, or tester">
     <div id="listBody" style="margin-top:8px;"></div>
@@ -1366,12 +1367,16 @@ function openList(){ $('listSearch').value = ""; renderList(); show($('listOverl
 function renderList(){
   const q = $('listSearch').value.trim().toLowerCase();
   const body = $('listBody'); body.innerHTML = "";
+  // Pole tabs show ONLY poles. Transformers, pedestals, sheds, pits and spans live under "Other Items".
+  const isPole = p => p.itemType !== 'span' && itemTypeInfo(p.itemType||'pole').key === 'pole';
+  const wantState = listFilter === 'tested' ? 'ok' : listFilter;
   const rows = poles
-    .filter(p => listFilter === 'all' || (itemTypeInfo(p.itemType||'pole').hasTest && poleState(p) === listFilter))
+    .filter(p => listFilter === 'other' ? !isPole(p)
+      : isPole(p) && (listFilter === 'all' || poleState(p) === wantState))
     .filter(p => !q || String(p.poleId).toLowerCase().includes(q) || (p.notes||'').toLowerCase().includes(q)
       || (p.components||[]).join(' ').toLowerCase().includes(q) || (p.testedBy||'').toLowerCase().includes(q))
     .sort((a,b) => String(a.poleId).localeCompare(String(b.poleId), undefined, { numeric:true }));
-  if (!rows.length) { body.innerHTML = '<p style="text-align:center;">No poles match.</p>'; return; }
+  if (!rows.length) { body.innerHTML = `<p style="text-align:center;">${listFilter === 'other' ? 'No other items match.' : 'No poles match.'}</p>`; return; }
   rows.forEach(p => {
     const info = itemTypeInfo(p.itemType||'pole');
     const state = poleState(p);
